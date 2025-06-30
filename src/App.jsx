@@ -1,35 +1,62 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { Route, BrowserRouter as Router, Routes } from 'react-router-dom';
+import { ToastContainer } from "react-toastify";
+
+import { MainHeader } from './components/MainHeader';
+import Sidebar from './components/MainSidebar';
+import ProtectedRoute from './components/ProtectedRoute';
+
+import { AuthProvider } from './contexts/auth-context';
+import { FavoritesProvider } from './contexts/favorites-context';
+import HelpPage from './pages/help';
+import LoginPage from './pages/login';
+import SettingsPage from './pages/settings';
+import SignupPage from './pages/signup';
+import { UploadPage } from './pages/upload';
+
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <Router>
+      <AuthProvider>
+        <FavoritesProvider>
+          {/* Top Navbar */}
+          <MainHeader />
+          
+          <div className="flex h-[calc(100vh-64px)]">
+            {/* Sidebar */}
+              <Sidebar />
+
+            {/* Page Content */}
+            <main className="flex-1 overflow-y-auto p-4">
+              <Routes>
+                  <Route path="/" element={<h2 className="text-2xl font-bold">Home Page</h2>} />
+                  <Route path="/explore" element={<h2 className="text-2xl font-bold">Explore Crafts</h2>} />
+                  
+                  {/* Protected Routes */}
+                  <Route element={<ProtectedRoute />}>
+                    <Route path="/upload" element={<UploadPage/>} />
+                    <Route path="/favorites" element={<h2 className="text-2xl font-bold">My Favorites</h2>} />
+                    <Route path="/notifications" element={<h2 className="text-2xl font-bold">Notifications</h2>} />
+                    <Route path="/profile" element={<h2 className="text-2xl font-bold">User Profile</h2>} />
+                    <Route path="/my-creations" element={<h2 className="text-2xl font-bold">My Creations</h2>} />
+                    <Route path="/settings" element={<SettingsPage/>} />
+                  </Route>
+
+                  {/* Public Routes */}
+                  <Route path="/help" element={<HelpPage/>} />
+                  <Route path="/login" element={<LoginPage/>} />
+                  <Route path="/signup" element={<SignupPage/>} />
+                  <Route path="/cart" element={<h2 className="text-2xl font-bold">Shopping Cart</h2>} />
+                  
+                  <Route path="*" element={<h2 className="text-2xl font-bold">404: Page Not Found</h2>} />
+                </Routes>
+        <ToastContainer />
+            </main>
+          </div>
+        </FavoritesProvider>
+      </AuthProvider>
+    </Router>
+  );
 }
 
-export default App
+export default App;
