@@ -8,10 +8,16 @@ import {
   Settings,
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/auth-context';
+import { useAuth } from '../contexts/auth-context'; // Correctly import useAuth
 
 export default function Sidebar() {
-  const { isLoggedIn } = useAuth();
+  // -------------------------------------------------------------------------
+  // IMPORTANT CHANGE HERE:
+  // Destructure userAuth from useAuth(), then access isAuthenticated from userAuth.
+  const { userAuth } = useAuth();
+  const { isAuthenticated } = userAuth;
+  // -------------------------------------------------------------------------
+
   const location = useLocation();
 
   const isActive = (path) => location.pathname === path;
@@ -54,7 +60,8 @@ export default function Sidebar() {
           <TooltipContent side="right">Explore</TooltipContent>
         </Tooltip>
 
-        {isLoggedIn && (
+        {/* Upload (conditionally rendered for logged-in users) */}
+        {isAuthenticated && ( // Use isAuthenticated from userAuth
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -75,8 +82,8 @@ export default function Sidebar() {
         {/* Spacer */}
         <div className="flex-grow" />
 
-        {/* Settings */}
-        {isLoggedIn && (
+        {/* Settings (conditionally rendered for logged-in users) */}
+        {isAuthenticated && ( // Use isAuthenticated from userAuth
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

@@ -8,6 +8,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './contexts/auth-context';
 import { FavoritesProvider } from './contexts/favorites-context';
 import HelpPage from './pages/help';
+import HomePage from './pages/home';
 import LoginPage from './pages/login';
 import SettingsPage from './pages/settings';
 import SignupPage from './pages/signup';
@@ -29,7 +30,7 @@ function App() {
             {/* Page Content */}
             <main className="flex-1 overflow-y-auto p-4">
               <Routes>
-                  <Route path="/" element={<h2 className="text-2xl font-bold">Home Page</h2>} />
+                  <Route path="/" element={<HomePage/>} />
                   <Route path="/explore" element={<h2 className="text-2xl font-bold">Explore Crafts</h2>} />
                   
                   {/* Protected Routes */}

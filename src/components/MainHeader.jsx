@@ -12,22 +12,27 @@ import {
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Bell, Heart, Search, ShoppingCart, User } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
-import { useLocation } from 'react-router-dom';
 import logo from '../assets/images/logo.png';
-import { useAuth } from '../contexts/auth-context';
+import { useAuth } from '../contexts/auth-context'; // Correctly import useAuth
 import { useFavorites } from '../contexts/favorites-context';
 
 
 export function MainHeader() {
-  const { isLoggedIn, logout } = useAuth();
+  // -------------------------------------------------------------------------
+  // IMPORTANT CHANGE HERE:
+  // Destructure userAuth, logout, and setUserAuth from useAuth().
+  // Then access isAuthenticated, username, and profilePicture from userAuth.
+  const { userAuth, logout, setUserAuth } = useAuth();
+  const { isAuthenticated, username, profilePicture, new_notification_available } = userAuth;
+  // -------------------------------------------------------------------------
+
   const { favorites } = useFavorites();
   const location = useLocation();
   const isActive = (path) => location.pathname.startsWith(path);
 
-  const cartCount = 3;
-
+  const cartCount = 3; // Assuming this is a static placeholder for now or comes from another context
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
@@ -48,7 +53,8 @@ export function MainHeader() {
       </div>
 
       <nav className="flex items-center gap-2">
-        {isLoggedIn ? (
+        {/* Use isAuthenticated from userAuth to check login status */}
+        {isAuthenticated ? (
           <>
             <TooltipProvider>
               {/* Favorites Link */}
@@ -72,9 +78,12 @@ export function MainHeader() {
               {/* Notifications Link */}
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" asChild className={isActive('/notifications') ? 'text-red-500' : ''}>
+                  <Button variant="ghost" size="icon" asChild className={`relative ${isActive('/notifications') ? 'text-red-500' : ''}`}>
                     <Link to="/notifications">
                       <Bell className="h-5 w-5" />
+                      {new_notification_available && ( // Show badge if new_notification_available is true
+                         <Badge className="absolute -right-1 -top-1 h-3 w-3 rounded-full p-0 flex items-center justify-center bg-red-500 animate-pulse" />
+                      )}
                       <span className="sr-only">Notifications</span>
                     </Link>
                   </Button>
@@ -107,15 +116,18 @@ export function MainHeader() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full">
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src="/placeholder.svg" alt="User" />
+                    {/* Use profilePicture from userAuth for the avatar image */}
+                    <AvatarImage src={profilePicture || "/placeholder.svg"} alt={username || "User"} />
                     <AvatarFallback>
-                      <User className="h-4 w-4" />
+                      {/* Use first letter of username or a default icon */}
+                      {username ? username.charAt(0).toUpperCase() : <User className="h-4 w-4" />}
                     </AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                {/* Display username if available */}
+                {username && <DropdownMenuLabel>{username}</DropdownMenuLabel>}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link to="/profile">Profile</Link>

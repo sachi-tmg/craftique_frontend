@@ -44,27 +44,26 @@ export const uploadProfilePicture = (
 //     });
 
 
-// //blog
-// export const uploadBanner = (formData) =>
-//     api.post("api/blog/uploadBanner", formData, {
-//         headers: { "Content-Type": "multipart/form-data" },
-//     });
-// export const createBlog = (data, token) => 
-//     api.post("api/blog/create-blog", data, {
-//         headers: {
-//             "Authorization": `Bearer ${token}`,
-//             "Content-Type": "application/json",
-//         },
-//     });
-// export const latestBlogs = (data) => api.post("api/blog/latest-blogs", data);
+//creation
+export const uploadCreationImage = (formData) =>
+    api.post("api/creation/creationImage", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+    });
+export const publishCreation = (data, token) => 
+    api.post("api/creation/publish-creation", data, {
+        headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json",
+        },
+    });
+export const latestCreations = (data) => api.post("api/creation/latest-creations", data);
+export const searchCreations = (data) => api.post("api/creation/search-creations", data);
+export const getTrendingCreations = () => api.get("api/creation/trending-creations");
+export const countAllCreations = () => api.get("api/creation/count-all-creations");
+export const countSearchCreations = (data) => api.post("api/creation/count-search-creations", data);
 // export const countRouteBlogs = (data) => api.post("api/blog/all-latest-blogs-count", data);
 // export const getTrendingBlogs = (params) => api.get("api/blog/trending-blogs", { params });
 // export const viewFullBlog = (data) => api.post("api/blog/blog-view", data);
-
-// //search
-// export const searchBlogs = (data) => api.post("api/blog/search-blogs", data);
-// export const countSearchRouteBlogs = (data) => api.post("api/blog/search-blogs-count", data);
-// export const searchRegularUsers = (data) => api.post("api/regular-users/search-users", data); 
 
 // //profile
 // export const getProfileInfo = (data) => api.post("api/regular-users/get-profile", data);
