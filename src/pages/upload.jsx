@@ -1,9 +1,8 @@
-// import { useRef, useState } from 'react';
+// import { useContext, useRef, useState } from 'react';
 // import { ToastContainer, toast } from 'react-toastify';
 // import 'react-toastify/dist/ReactToastify.css'; // Import toastify CSS
 
 // // Assuming these UI components are available from your project's component library
-// // You would need to ensure these paths are correct for your setup.
 // import { Button } from '@/components/ui/button';
 // import { Card, CardContent } from '@/components/ui/card';
 // import { Checkbox } from '@/components/ui/checkbox';
@@ -23,13 +22,23 @@
 // import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 // import { Check, HelpCircle, ImageIcon, Loader2, Upload, X } from 'lucide-react';
 
+// // Import API functions
+// import { publishCreation, uploadCreationImage } from '../api/api'; // Adjust path as needed
+
+// // -----------------------------------------------------------------------------
+// // IMPORTANT CHANGE HERE:
+// // Import AuthContext from your actual authentication module, NOT a placeholder.
+// import { AuthContext } from '../contexts/auth-context'; // Assuming auth-context.jsx is in the same directory or adjust path
+// // -----------------------------------------------------------------------------
+
 // // A simple Image component replacement for next/image
 // const CustomImage = ({ src, alt, className }) => {
 //   return <img src={src} alt={alt} className={className} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
 // };
 
 // export function UploadPage() {
-//   const [images, setImages] = useState([]);
+//   const [images, setImages] = useState([]); // Stores URLs of uploaded images
+//   const [imageFiles, setImageFiles] = useState([]); // Stores actual File objects for upload
 //   const [forSale, setForSale] = useState(false);
 //   const [selectedCategory, setSelectedCategory] = useState("");
 //   const [hasDimensions, setHasDimensions] = useState(true);
@@ -38,36 +47,87 @@
 //   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
 //   const [creationTitle, setCreationTitle] = useState("");
 //   const [creationDescription, setCreationDescription] = useState("");
+//   const [materialsUsed, setMaterialsUsed] = useState(""); // New state for materials
+//   const [dimensions, setDimensions] = useState(""); // New state for dimensions
 //   const [price, setPrice] = useState("");
 //   const fileInputRef = useRef(null);
+
+//   // -------------------------------------------------------------------------
+//   // IMPORTANT CHANGE HERE:
+//   // Access userAuth from the imported AuthContext, then destructure token.
+//   const { userAuth } = useContext(AuthContext);
+//   const token = userAuth.token;
+//   // -------------------------------------------------------------------------
 
 //   const handleAddImageClick = () => {
 //     fileInputRef.current?.click();
 //   };
 
-//   const handleFileChange = (event) => {
+// const handleFileChange = async (event) => {
+//     console.log("handleFileChange triggered.");
 //     if (event.target.files && event.target.files.length > 0) {
-//       const filesArray = Array.from(event.target.files);
-//       const newImageUrls = filesArray.map(file => URL.createObjectURL(file));
+//         console.log("Files detected:", event.target.files);
+//         const filesArray = Array.from(event.target.files);
+//         const newImageFiles = filesArray.slice(0, 5 - images.length);
 
-//       // Limit to a total of 5 images
-//       setImages(prevImages => {
-//         const combinedImages = [...prevImages, ...newImageUrls];
-//         return combinedImages.slice(0, 5); // Take only the first 5
-//       });
+//         const uploadPromises = newImageFiles.map(async (file) => {
+//             const formData = new FormData();
+//             formData.append('creationImage', file); // Make sure 'creationImage' matches your Multer field name
+
+//             console.log("Attempting to upload file:", file.name);
+
+//             try {
+//                 // This calls your backend's /api/creation/creationImage endpoint
+//                 const response = await uploadCreationImage(formData);
+//                 console.log("Upload API response:", response.data);
+
+//                 if (response.data.success) {
+//                     // *** IMPORTANT MODIFICATION HERE ***
+//                     // Construct the full URL, just like your banner upload does
+//                     // Make sure the path '/Creations/' matches where your backend serves these images
+//                     const imageUrl = response.data.filename;
+//                     console.log("Constructed image URL:", imageUrl);
+//                     return imageUrl; // Return the full URL
+//                 } else {
+//                     toast.error("Image upload failed: " + (response.data.message || "Unknown error"));
+//                     return null;
+//                 }
+//             } catch (error) {
+//                 console.error("Error during image upload API call:", error);
+//                 toast.error("Failed to upload image. Please try again.", { position: "top-center" });
+//                 return null;
+//             }
+//         });
+
+//         const uploadedImageUrls = (await Promise.all(uploadPromises)).filter(Boolean);
+
+//         setImages(prevImages => {
+//             const combinedImages = [...prevImages, ...uploadedImageUrls];
+//             return combinedImages.slice(0, 5);
+//         });
+//         console.log("Images state updated:", uploadedImageUrls);
+//     } else {
+//         console.log("No files selected or files array is empty.");
 //     }
+// };
+
+//   const handleRemoveImage = (indexToRemove) => {
+//     setImages(images.filter((_, i) => i !== indexToRemove));
+//     // If you were tracking imageFiles, you'd remove it here too:
+//     // setImageFiles(imageFiles.filter((_, i) => i !== indexToRemove));
 //   };
 
 //   const handleCategoryChange = (category) => {
 //     setSelectedCategory(category);
-//     if (["digital art", "photography", "nft", "graphic design"].includes(category)) { // Use lowercase for comparison
+//     if (["digital art", "photography", "nft", "graphic design"].includes(category)) {
 //       setHasDimensions(false);
+//       setDimensions(""); // Clear dimensions if category doesn't need them
 //     } else {
 //       setHasDimensions(true);
 //     }
 //   };
 
-//   // --- Validation Logic (now only returns boolean) ---
+//   // --- Validation Logic ---
 //   const validateDetails = (showToast = false) => {
 //     if (!creationTitle.trim()) {
 //       if (showToast) toast.error("Please enter a title for your creation.", { position: "top-center" });
@@ -79,6 +139,10 @@
 //     }
 //     if (!selectedCategory) {
 //       if (showToast) toast.error("Please select a category for your creation.", { position: "top-center" });
+//       return false;
+//     }
+//     if (!materialsUsed.trim()) { // Validate materials
+//       if (showToast) toast.error("Please enter materials used for your creation.", { position: "top-center" });
 //       return false;
 //     }
 //     if (images.length === 0) {
@@ -96,7 +160,6 @@
 
 //   const handleTabChange = (value) => {
 //     if (value === "preview" || value === "publish") {
-//       // Only show toasts when explicitly trying to navigate to preview/publish
 //       if (!validateDetails(true)) {
 //         return; // Prevent tab change if validation fails
 //       }
@@ -104,36 +167,68 @@
 //     setActiveTab(value);
 //   };
 
-//   const handlePublish = () => {
-//     // Re-validate with toast before publishing
+//   const handlePublish = async () => {
 //     if (!validateDetails(true)) {
 //       setActiveTab("details"); // Go back to details if validation fails
 //       return;
 //     }
 
-//     setIsPublishing(true);
+//     // --- Add a check for token presence before publishing ---
+//     if (!token) {
+//         toast.error("You must be logged in to publish a creation.", { position: "top-center" });
+//         setIsPublishing(false); // Ensure publishing state is false
+//         return;
+//     }
+//     // --- End check for token presence ---
 
-//     setTimeout(() => {
+//     setIsPublishing(true);
+//     let loadingToast = toast.loading("Publishing creation...");
+
+//     // Prepare data for backend
+//     const creationData = {
+//       title: creationTitle,
+//       des: creationDescription,
+//       category: selectedCategory,
+//       materials: materialsUsed,
+//       creationPicture: images.length > 0 ? images[0] : null, // Send the URL of the first image
+//       dimension: hasDimensions ? dimensions : null, // Send dimension if applicable
+//       price: forSale ? parseFloat(price) : 0,
+//       forSale: forSale,
+//       draft: false, // Always publish as not a draft
+//     };
+
+//     try {
+//       // ---------------------------------------------------------------------
+//       // The `token` variable now correctly holds the token from AuthContext.
+//       await publishCreation(creationData, token); // Call the API function
+//       // ---------------------------------------------------------------------
+//       toast.dismiss(loadingToast);
 //       setIsPublishing(false);
 //       setShowSuccessDialog(true);
-//     }, 2000);
+//       toast.success("Your creation has been successfully published!", {
+//         position: "top-right",
+//         autoClose: 5000,
+//         hideProgressBar: false,
+//         closeOnClick: true,
+//         pauseOnHover: true,
+//         draggable: true,
+//         progress: undefined,
+//         theme: "light",
+//       });
+//     } catch (error) {
+//       console.error("Error publishing creation:", error);
+//       toast.dismiss(loadingToast);
+//       setIsPublishing(false);
+//       const errorMessage = error?.response?.data?.message || error?.message || "An error occurred while publishing your creation.";
+//       toast.error(errorMessage, { position: "top-center" });
+//     }
 //   };
 
 //   const handleViewCreation = () => {
 //     setShowSuccessDialog(false);
-
-//     toast.success("Your creation has been successfully published!", {
-//       position: "top-right",
-//       autoClose: 5000,
-//       hideProgressBar: false,
-//       closeOnClick: true,
-//       pauseOnHover: true,
-//       draggable: true,
-//       progress: undefined,
-//       theme: "light",
-//     });
-
 //     console.log("Navigating to /craft/new-creation");
+//     // In a real app, you would navigate to the new creation's page:
+//     // navigate(`/creation/${creation_id}`);
 //   };
 
 //   const categories = [
@@ -162,7 +257,6 @@
 //       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
 //         <TabsList className="grid w-full grid-cols-3">
 //           <TabsTrigger value="details">Details</TabsTrigger>
-//           {/* Tabs are disabled if details are not valid AND user is NOT already on that tab */}
 //           <TabsTrigger value="preview" disabled={!validateDetails() && activeTab !== "preview"}>
 //             Preview
 //           </TabsTrigger>
@@ -192,8 +286,8 @@
 //                         size="icon"
 //                         className="absolute right-1 top-1 h-6 w-6"
 //                         onClick={(e) => {
-//                           e.stopPropagation(); // Prevent triggering file input when removing
-//                           setImages(images.filter((_, i) => i !== index));
+//                           e.stopPropagation();
+//                           handleRemoveImage(index);
 //                         }}
 //                       >
 //                         <X className="h-4 w-4" />
@@ -203,7 +297,7 @@
 //                   {images.length < 5 && (
 //                     <div
 //                       className="flex aspect-square cursor-pointer items-center justify-center rounded-md border border-dashed"
-//                       onClick={handleAddImageClick} // Clickable area for adding images
+//                       onClick={handleAddImageClick}
 //                     >
 //                       <div className="flex flex-col items-center gap-1 text-center">
 //                         <ImageIcon className="h-8 w-8 text-muted-foreground" />
@@ -211,14 +305,13 @@
 //                       </div>
 //                     </div>
 //                   )}
-//                   {/* Invisible file input */}
 //                   <input
 //                     type="file"
 //                     ref={fileInputRef}
 //                     onChange={handleFileChange}
 //                     className="hidden"
-//                     accept="image/*" // Restrict to image files
-//                     multiple // Allow multiple file selection
+//                     accept="image/*"
+//                     multiple
 //                   />
 //                 </div>
 //               </div>
@@ -264,7 +357,12 @@
 //                 </div>
 //                 <div className="space-y-2">
 //                   <Label htmlFor="materials">Materials Used</Label>
-//                   <Input id="materials" placeholder="e.g., Clay, Glaze, Wood, Fabric" />
+//                   <Input
+//                     id="materials"
+//                     placeholder="e.g., Clay, Glaze, Wood, Fabric"
+//                     value={materialsUsed}
+//                     onChange={(e) => setMaterialsUsed(e.target.value)}
+//                   />
 //                 </div>
 //                 <div className="space-y-2">
 //                   <div className="flex items-center justify-between">
@@ -300,7 +398,12 @@
 //                     </div>
 //                   </div>
 //                   {hasDimensions ? (
-//                     <Input id="dimensions" placeholder="e.g., 10 inches x 5 inches x 3 inches" />
+//                     <Input
+//                       id="dimensions"
+//                       placeholder="e.g., 10 inches x 5 inches x 3 inches"
+//                       value={dimensions}
+//                       onChange={(e) => setDimensions(e.target.value)}
+//                     />
 //                   ) : (
 //                     <div className="text-sm text-muted-foreground border rounded-md p-2 bg-muted/20">
 //                       No physical dimensions needed for this creation
@@ -355,7 +458,6 @@
 //                 </p>
 //                 <div className="mx-auto max-w-md overflow-hidden rounded-lg border">
 //                   <div className="aspect-square relative">
-//                     {/* Display the first uploaded image, or a placeholder if none */}
 //                     {images.length > 0 ? (
 //                       <CustomImage src={images[0]} alt="Creation preview" className="object-cover" />
 //                     ) : (
@@ -464,9 +566,10 @@
 //   );
 // }
 
+
 import { useContext, useRef, useState } from 'react';
 import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css'; // Import toastify CSS
+import 'react-toastify/dist/ReactToastify.css';
 
 // Assuming these UI components are available from your project's component library
 import { Button } from '@/components/ui/button';
@@ -489,22 +592,17 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Check, HelpCircle, ImageIcon, Loader2, Upload, X } from 'lucide-react';
 
 // Import API functions
-import { publishCreation, uploadCreationImage } from '../api/api'; // Adjust path as needed
+import { publishCreation, uploadCreationImage } from '../api/api';
 
-// -----------------------------------------------------------------------------
 // IMPORTANT CHANGE HERE:
-// Import AuthContext from your actual authentication module, NOT a placeholder.
-import { AuthContext } from '../contexts/auth-context'; // Assuming auth-context.jsx is in the same directory or adjust path
-// -----------------------------------------------------------------------------
+import { AuthContext } from '../contexts/auth-context';
 
-// A simple Image component replacement for next/image
 const CustomImage = ({ src, alt, className }) => {
   return <img src={src} alt={alt} className={className} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
 };
 
 export function UploadPage() {
-  const [images, setImages] = useState([]); // Stores URLs of uploaded images
-  const [imageFiles, setImageFiles] = useState([]); // Stores actual File objects for upload
+  const [image, setImage] = useState(null);
   const [forSale, setForSale] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [hasDimensions, setHasDimensions] = useState(true);
@@ -513,87 +611,86 @@ export function UploadPage() {
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [creationTitle, setCreationTitle] = useState("");
   const [creationDescription, setCreationDescription] = useState("");
-  const [materialsUsed, setMaterialsUsed] = useState(""); // New state for materials
-  const [dimensions, setDimensions] = useState(""); // New state for dimensions
+  const [materialsUsed, setMaterialsUsed] = useState("");
+  const [dimensions, setDimensions] = useState("");
   const [price, setPrice] = useState("");
   const fileInputRef = useRef(null);
 
-  // -------------------------------------------------------------------------
-  // IMPORTANT CHANGE HERE:
-  // Access userAuth from the imported AuthContext, then destructure token.
+  // Define character limit for the description
+  const DESCRIPTION_MAX_LENGTH = 500; // You can adjust this value
+
   const { userAuth } = useContext(AuthContext);
   const token = userAuth.token;
-  // -------------------------------------------------------------------------
 
   const handleAddImageClick = () => {
     fileInputRef.current?.click();
   };
 
-const handleFileChange = async (event) => {
+  const handleFileChange = async (event) => {
     console.log("handleFileChange triggered.");
     if (event.target.files && event.target.files.length > 0) {
-        console.log("Files detected:", event.target.files);
-        const filesArray = Array.from(event.target.files);
-        const newImageFiles = filesArray.slice(0, 5 - images.length);
+      console.log("File detected:", event.target.files[0]);
+      const file = event.target.files[0];
 
-        const uploadPromises = newImageFiles.map(async (file) => {
-            const formData = new FormData();
-            formData.append('creationImage', file); // Make sure 'creationImage' matches your Multer field name
+      const formData = new FormData();
+      formData.append('creationImage', file);
 
-            console.log("Attempting to upload file:", file.name);
+      console.log("Attempting to upload file:", file.name);
 
-            try {
-                // This calls your backend's /api/creation/creationImage endpoint
-                const response = await uploadCreationImage(formData);
-                console.log("Upload API response:", response.data);
+      try {
+        const response = await uploadCreationImage(formData);
+        console.log("Upload API response:", response.data);
 
-                if (response.data.success) {
-                    // *** IMPORTANT MODIFICATION HERE ***
-                    // Construct the full URL, just like your banner upload does
-                    // Make sure the path '/Creations/' matches where your backend serves these images
-                    const imageUrl = response.data.filename;
-                    console.log("Constructed image URL:", imageUrl);
-                    return imageUrl; // Return the full URL
-                } else {
-                    toast.error("Image upload failed: " + (response.data.message || "Unknown error"));
-                    return null;
-                }
-            } catch (error) {
-                console.error("Error during image upload API call:", error);
-                toast.error("Failed to upload image. Please try again.", { position: "top-center" });
-                return null;
-            }
-        });
-
-        const uploadedImageUrls = (await Promise.all(uploadPromises)).filter(Boolean);
-
-        setImages(prevImages => {
-            const combinedImages = [...prevImages, ...uploadedImageUrls];
-            return combinedImages.slice(0, 5);
-        });
-        console.log("Images state updated:", uploadedImageUrls);
+        if (response.data.success) {
+          const imageUrl = response.data.filename;
+          console.log("Constructed image URL:", imageUrl);
+          setImage(imageUrl);
+          toast.success("Image uploaded successfully!", { position: "top-center" });
+        } else {
+          toast.error("Image upload failed: " + (response.data.message || "Unknown error"));
+        }
+      } catch (error) {
+        console.error("Error during image upload API call:", error);
+        toast.error("Failed to upload image. Please try again.", { position: "top-center" });
+      }
     } else {
-        console.log("No files selected or files array is empty.");
+      console.log("No file selected.");
     }
-};
+  };
 
-  const handleRemoveImage = (indexToRemove) => {
-    setImages(images.filter((_, i) => i !== indexToRemove));
-    // If you were tracking imageFiles, you'd remove it here too:
-    // setImageFiles(imageFiles.filter((_, i) => i !== indexToRemove));
+  const handleRemoveImage = () => {
+    setImage(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    toast.info("Image removed.", { position: "top-center" });
   };
 
   const handleCategoryChange = (category) => {
     setSelectedCategory(category);
     if (["digital art", "photography", "nft", "graphic design"].includes(category)) {
       setHasDimensions(false);
-      setDimensions(""); // Clear dimensions if category doesn't need them
+      setDimensions("");
     } else {
       setHasDimensions(true);
     }
   };
 
-  // --- Validation Logic ---
+  // New handler for description changes
+  const handleDescriptionChange = (e) => {
+    const text = e.target.value;
+    if (text.length <= DESCRIPTION_MAX_LENGTH) {
+      setCreationDescription(text);
+    } else {
+      // Optionally provide feedback if user tries to type more
+      toast.info(`Description limited to ${DESCRIPTION_MAX_LENGTH} characters.`, {
+        position: "bottom-center",
+        autoClose: 1500,
+        hideProgressBar: true,
+      });
+    }
+  };
+
   const validateDetails = (showToast = false) => {
     if (!creationTitle.trim()) {
       if (showToast) toast.error("Please enter a title for your creation.", { position: "top-center" });
@@ -603,16 +700,20 @@ const handleFileChange = async (event) => {
       if (showToast) toast.error("Please enter a description for your creation.", { position: "top-center" });
       return false;
     }
+    if (creationDescription.length > DESCRIPTION_MAX_LENGTH) { // Added validation for max length
+      if (showToast) toast.error(`Description exceeds maximum length of ${DESCRIPTION_MAX_LENGTH} characters.`, { position: "top-center" });
+      return false;
+    }
     if (!selectedCategory) {
       if (showToast) toast.error("Please select a category for your creation.", { position: "top-center" });
       return false;
     }
-    if (!materialsUsed.trim()) { // Validate materials
+    if (!materialsUsed.trim()) {
       if (showToast) toast.error("Please enter materials used for your creation.", { position: "top-center" });
       return false;
     }
-    if (images.length === 0) {
-      if (showToast) toast.error("Please upload at least one image.", { position: "top-center" });
+    if (!image) {
+      if (showToast) toast.error("Please upload one image for your creation.", { position: "top-center" });
       return false;
     }
     if (forSale) {
@@ -627,7 +728,7 @@ const handleFileChange = async (event) => {
   const handleTabChange = (value) => {
     if (value === "preview" || value === "publish") {
       if (!validateDetails(true)) {
-        return; // Prevent tab change if validation fails
+        return;
       }
     }
     setActiveTab(value);
@@ -635,39 +736,33 @@ const handleFileChange = async (event) => {
 
   const handlePublish = async () => {
     if (!validateDetails(true)) {
-      setActiveTab("details"); // Go back to details if validation fails
+      setActiveTab("details");
       return;
     }
 
-    // --- Add a check for token presence before publishing ---
     if (!token) {
-        toast.error("You must be logged in to publish a creation.", { position: "top-center" });
-        setIsPublishing(false); // Ensure publishing state is false
-        return;
+      toast.error("You must be logged in to publish a creation.", { position: "top-center" });
+      setIsPublishing(false);
+      return;
     }
-    // --- End check for token presence ---
 
     setIsPublishing(true);
     let loadingToast = toast.loading("Publishing creation...");
 
-    // Prepare data for backend
     const creationData = {
       title: creationTitle,
       des: creationDescription,
       category: selectedCategory,
       materials: materialsUsed,
-      creationPicture: images.length > 0 ? images[0] : null, // Send the URL of the first image
-      dimension: hasDimensions ? dimensions : null, // Send dimension if applicable
+      creationPicture: image,
+      dimension: hasDimensions ? dimensions : null,
       price: forSale ? parseFloat(price) : 0,
       forSale: forSale,
-      draft: false, // Always publish as not a draft
+      draft: false,
     };
 
     try {
-      // ---------------------------------------------------------------------
-      // The `token` variable now correctly holds the token from AuthContext.
-      await publishCreation(creationData, token); // Call the API function
-      // ---------------------------------------------------------------------
+      await publishCreation(creationData, token);
       toast.dismiss(loadingToast);
       setIsPublishing(false);
       setShowSuccessDialog(true);
@@ -698,19 +793,8 @@ const handleFileChange = async (event) => {
   };
 
   const categories = [
-    "Pottery",
-    "Origami",
-    "Embroidery",
-    "Painting",
-    "Weaving",
-    "Macramé",
-    "Woodworking",
-    "Jewelry",
-    "Knitting",
-    "Digital Art",
-    "Photography",
-    "Graphic Design",
-    "Other",
+    "Pottery", "Origami", "Embroidery", "Painting", "Weaving", "Macramé",
+    "Woodworking", "Jewelry", "Knitting", "Digital Art", "Photography", "Graphic Design", "Other",
   ];
 
   return (
@@ -735,16 +819,16 @@ const handleFileChange = async (event) => {
           <Card>
             <CardContent className="p-6">
               <div className="space-y-4">
-                <h2 className="text-xl font-semibold">Upload Images</h2>
+                <h2 className="text-xl font-semibold">Upload Image</h2>
                 <p className="text-sm text-muted-foreground">
-                  Upload high-quality images of your creation. You can add up to 5 images.
+                  Upload a high-quality image of your creation. Only one image is allowed.
                 </p>
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5">
-                  {images.map((image, index) => (
-                    <div key={index} className="relative aspect-square overflow-hidden rounded-md border">
+                <div className="grid grid-cols-1 gap-4">
+                  {image ? (
+                    <div className="relative aspect-video overflow-hidden rounded-md border">
                       <CustomImage
                         src={image}
-                        alt={`Uploaded image ${index + 1}`}
+                        alt="Uploaded creation image"
                         className="object-cover"
                       />
                       <Button
@@ -753,16 +837,15 @@ const handleFileChange = async (event) => {
                         className="absolute right-1 top-1 h-6 w-6"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleRemoveImage(index);
+                          handleRemoveImage();
                         }}
                       >
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
-                  ))}
-                  {images.length < 5 && (
+                  ) : (
                     <div
-                      className="flex aspect-square cursor-pointer items-center justify-center rounded-md border border-dashed"
+                      className="flex aspect-video cursor-pointer items-center justify-center rounded-md border border-dashed"
                       onClick={handleAddImageClick}
                     >
                       <div className="flex flex-col items-center gap-1 text-center">
@@ -777,7 +860,6 @@ const handleFileChange = async (event) => {
                     onChange={handleFileChange}
                     className="hidden"
                     accept="image/*"
-                    multiple
                   />
                 </div>
               </div>
@@ -803,8 +885,12 @@ const handleFileChange = async (event) => {
                     placeholder="Describe your creation, including materials, techniques, and inspiration"
                     className="min-h-32"
                     value={creationDescription}
-                    onChange={(e) => setCreationDescription(e.target.value)}
+                    onChange={handleDescriptionChange} // Use the new handler here
                   />
+                  {/* Character counter */}
+                  <div className="text-right text-sm text-muted-foreground">
+                    {creationDescription.length}/{DESCRIPTION_MAX_LENGTH} characters
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="category">Category</Label>
@@ -924,8 +1010,8 @@ const handleFileChange = async (event) => {
                 </p>
                 <div className="mx-auto max-w-md overflow-hidden rounded-lg border">
                   <div className="aspect-square relative">
-                    {images.length > 0 ? (
-                      <CustomImage src={images[0]} alt="Creation preview" className="object-cover" />
+                    {image ? (
+                      <CustomImage src={image} alt="Creation preview" className="object-cover" />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center bg-muted/20 text-muted-foreground">
                         No image uploaded
@@ -970,7 +1056,7 @@ const handleFileChange = async (event) => {
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
                         <Check className="h-4 w-4 text-primary" />
                       </div>
-                      <span>Images uploaded</span>
+                      <span>Image uploaded</span>
                     </div>
                   </div>
                   <div className="flex items-center justify-between rounded-md border p-3">

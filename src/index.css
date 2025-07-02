@@ -155,3 +155,72 @@
     @apply bg-background text-foreground;
   }
 }
+
+
+
+/* --- ADD MASONRY CSS HERE --- */
+
+/* Masonry Grid Styles */
+.masonry-grid-improved {
+  /* Using CSS Columns for masonry effect */
+  column-count: 4; /* Default: 4 columns */
+  column-gap: 16px; /* Gap between columns */
+  /* This helps prevent items from breaking across columns in some browsers */
+  /* While not part of official masonry spec, it's a common fallback for column-count */
+  break-inside: avoid;
+  box-sizing: border-box; /* Ensures padding and border are included in element's total width */
+}
+
+/* Masonry Item Styles */
+.masonry-item-improved {
+  /* Ensure items don't break across columns */
+  break-inside: avoid-column;
+  /* Prevent margin collapse and ensure consistent spacing */
+  margin-bottom: 16px; /* Gap between items within a column */
+  /* Essential for images within masonry items to scale correctly */
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Responsive adjustments for different screen sizes */
+@media (max-width: 1200px) {
+  .masonry-grid-improved {
+    column-count: 3; /* 3 columns on medium screens */
+  }
+}
+
+@media (max-width: 768px) {
+  .masonry-grid-improved {
+    column-count: 2; /* 2 columns on tablets */
+  }
+}
+
+@media (max-width: 480px) {
+  .masonry-grid-improved {
+    column-count: 1; /* 1 column on small mobile screens */
+  }
+}
+
+/* Ensure images within the masonry items adapt */
+.masonry-item-improved img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 8px; /* Optional: adds rounded corners to images */
+}
+
+/* .masonry-item-improved .group-hover\:opacity-100.absolute {
+  background-color: rgba(43, 43, 43, 0.8) !important; /* Pinterest-like red with 80% opacity */
+  /* color: white !important; /* Text/icon color for buttons */
+/* }
+
+.masonry-item-improved .group-hover\:opacity-100.absolute .lucide {
+  color: white !important; /* Make icon white on hover */
+  /* fill: white !important; /* Ensure fill for heart icon is also white */
+/* }
+
+/* For the favorited heart, keep it red but ensure it's visible on the new background */
+/* .masonry-item-improved .group-hover\:opacity-100.absolute .lucide.fill-current {
+  fill: red !important; /* Keep favorited heart red */
+  /* color: red !important; /* Ensure stroke is also red if applicable */
+/* } */ 

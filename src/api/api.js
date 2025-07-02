@@ -61,6 +61,18 @@ export const searchCreations = (data) => api.post("api/creation/search-creations
 export const getTrendingCreations = () => api.get("api/creation/trending-creations");
 export const countAllCreations = () => api.get("api/creation/count-all-creations");
 export const countSearchCreations = (data) => api.post("api/creation/count-search-creations", data);
+
+export const getCreationById = async (creationId) => {
+  try {
+    // FIX: Use 'api.get' instead of 'axios.get'
+    const response = await api.get(`api/creation/${creationId}`);
+    return response.data; // Assuming your API returns the single creation object directly
+  } catch (error) {
+    console.error(`Error fetching creation with ID ${creationId}:`, error);
+    throw error;
+  }
+};
+
 // export const countRouteBlogs = (data) => api.post("api/blog/all-latest-blogs-count", data);
 // export const getTrendingBlogs = (params) => api.get("api/blog/trending-blogs", { params });
 // export const viewFullBlog = (data) => api.post("api/blog/blog-view", data);

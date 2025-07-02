@@ -7,6 +7,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 
 import { AuthProvider } from './contexts/auth-context';
 import { FavoritesProvider } from './contexts/favorites-context';
+import CraftDetailPage from './pages/craftDetailPage';
 import HelpPage from './pages/help';
 import HomePage from './pages/home';
 import LoginPage from './pages/login';
@@ -48,6 +49,7 @@ function App() {
                   <Route path="/login" element={<LoginPage/>} />
                   <Route path="/signup" element={<SignupPage/>} />
                   <Route path="/cart" element={<h2 className="text-2xl font-bold">Shopping Cart</h2>} />
+                  <Route path="/craft/:craftId" element={<CraftDetailPage />} />
                   
                   <Route path="*" element={<h2 className="text-2xl font-bold">404: Page Not Found</h2>} />
                 </Routes>
