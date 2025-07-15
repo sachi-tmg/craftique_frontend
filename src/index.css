@@ -163,7 +163,7 @@
 /* Masonry Grid Styles */
 .masonry-grid-improved {
   /* Using CSS Columns for masonry effect */
-  column-count: 4; /* Default: 4 columns */
+  column-count: 5; /* Default: 4 columns */
   column-gap: 16px; /* Gap between columns */
   /* This helps prevent items from breaking across columns in some browsers */
   /* While not part of official masonry spec, it's a common fallback for column-count */

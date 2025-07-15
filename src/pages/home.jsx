@@ -1,31 +1,40 @@
-import { useEffect, useRef, useState } from "react";
-// Import ToastContainer and toast from react-toastify
-import { ToastContainer, toast } from 'react-toastify';
-// Import the default CSS for react-toastify
-import 'react-toastify/dist/ReactToastify.css';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
-// Import your existing UI components - keep these if your Vite alias is set up
-import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-// REMOVED: import { useToast } from '@/components/ui/use-toast'; // Remove this line
-import { Heart, ShoppingCart } from "lucide-react";
-import { getTrendingCreations, latestCreations } from "../api/api";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Bookmark, Heart, ShoppingCart } from "lucide-react";
+import { addToCart, getFeaturedCreations, getTrendingCreations, latestCreations } from "../api/api";
 import { useAuth } from "../contexts/auth-context";
+import { useCart } from "../contexts/cart-context";
 import { useFavorites } from "../contexts/favorites-context";
 
-export default function HomePage() {
-  const { isLoggedIn } = useAuth();
-  const { toggleFavorite, isFavorite } = useFavorites();
-  // REMOVED: const { toast } = useToast(); // No longer needed, as we import 'toast' directly from 'react-toastify'
-  const masonryRef = useRef(null);
+// Make sure your main container class is `main.flex-1.overflow-y-auto`
+const SCROLL_CONTAINER_SELECTOR = "main.flex-1.overflow-y-auto";
 
-  // State to hold fetched creations data
+export default function HomePage() {
+  const { userAuth } = useAuth();
+  const { toggleFavorite, isFavorite } = useFavorites();
+  const { addToGuestCart } = useCart();
+
+  // Featured (random, single load)
   const [featuredCreations, setFeaturedCreations] = useState([]);
-  const [trendingSectionCreations, setTrendingSectionCreations] = useState([]);
   const [loadingFeatured, setLoadingFeatured] = useState(true);
-  const [loadingTrending, setLoadingTrending] = useState(true);
   const [errorFeatured, setErrorFeatured] = useState(null);
+
+  // Trending (fixed 5)
+  const [trendingSectionCreations, setTrendingSectionCreations] = useState([]);
+  const [loadingTrending, setLoadingTrending] = useState(true);
   const [errorTrending, setErrorTrending] = useState(null);
+
+  // New (infinite scroll)
+  const [newCreations, setNewCreations] = useState([]);
+  const [newPage, setNewPage] = useState(1);
+  const [newHasMore, setNewHasMore] = useState(true);
+  const [loadingNew, setLoadingNew] = useState(false);
+  const [errorNew, setErrorNew] = useState(null);
+  const newObserverRef = useRef(null);
 
   const categories = [
     { name: "Pottery", count: 245 },
@@ -38,113 +47,185 @@ export default function HomePage() {
     { name: "Woodworking", count: 154 },
   ];
 
+  // --- FEATURED ---
   useEffect(() => {
-    const fetchCreations = async () => {
+    const fetchFeatured = async () => {
       setLoadingFeatured(true);
       setErrorFeatured(null);
       try {
-        const response = await latestCreations({ page: 1 });
-
-        if (response.data && Array.isArray(response.data.creations)) {
-          const mappedCreations = response.data.creations.map((creation) => ({
-            id: creation.creation_id,
-            title: creation.title,
-            artist: creation.fullName,
-            category: creation.category,
-            image: creation.creationPicture || "/placeholder.svg",
-            likes: creation.activity?.likeCount || 0,
-            forSale: creation.forSale,
-            price: parseFloat(creation.price) || 0,
-          }));
-          setFeaturedCreations(mappedCreations);
-        } else {
-          throw new Error("Invalid data format received for featured creations.");
-        }
+        const response = await getFeaturedCreations();
+        const mapped = (response.data?.creations || []).map((creation) => ({
+          id: creation.creation_id,
+          _id: creation._id,
+          title: creation.title,
+          artist: creation.userId?.fullName || "Unknown Artist",
+          category: creation.category,
+          image: creation.creationPicture || "/placeholder.svg",
+          likes: creation.activity?.likeCount || 0,
+          forSale: creation.forSale,
+          price: parseFloat(creation.price) || 0,
+        }));
+        setFeaturedCreations(mapped);
       } catch (err) {
-        console.error("Error fetching featured creations:", err);
         setErrorFeatured(err.message || "Failed to load featured creations.");
-        // Modified toast call for react-toastify (using toast.error for destructive)
-        toast.error(`Error: ${err.message || "Failed to load featured creations."}`); 
+        toast.error(`Error: ${err.message || "Failed to load featured creations."}`);
       } finally {
         setLoadingFeatured(false);
       }
     };
+    fetchFeatured();
+  }, []);
 
-    fetchCreations();
-  }, []); // Removed 'toast' from dependency array as it's a global function, not a hook return value
-
+  // --- TRENDING ---
   useEffect(() => {
     const fetchTrending = async () => {
       setLoadingTrending(true);
       setErrorTrending(null);
       try {
         const response = await getTrendingCreations();
-        if (response.data && Array.isArray(response.data.creations)) {
-          const mappedTrending = response.data.creations.map((creation) => ({
-            id: creation.creation_id,
-            title: creation.title,
-            artist: creation.fullName,
-            category: creation.category,
-            image: creation.creationPicture || "/placeholder.svg",
-            likes: creation.activity?.likeCount || 0,
-            forSale: creation.forSale,
-            price: parseFloat(creation.price) || 0,
-          }));
-          setTrendingSectionCreations(mappedTrending);
-        } else {
-          throw new Error("Invalid data format received for trending creations.");
-        }
+        const mappedTrending = (response.data?.creations || []).map((creation) => ({
+          id: creation.creation_id,
+          _id: creation._id,
+          title: creation.title,
+          artist: creation.fullName || "NO_NAME",
+          category: creation.category,
+          image: creation.creationPicture || "/placeholder.svg",
+          likes: creation.activity?.likeCount || 0,
+          forSale: creation.forSale,
+          price: parseFloat(creation.price) || 0,
+        }));
+        setTrendingSectionCreations(mappedTrending);
       } catch (err) {
-        console.error("Error fetching trending creations:", err);
         setErrorTrending(err.message || "Failed to load trending creations.");
-        // Modified toast call for react-toastify (using toast.error for destructive)
         toast.error(`Error: ${err.message || "Failed to load trending creations."}`);
       } finally {
         setLoadingTrending(false);
       }
     };
-
     fetchTrending();
-  }, []); // Removed 'toast' from dependency array
+  }, []);
 
-  const formatPrice = (price) => {
-    return `Rs. ${Number(price).toLocaleString()}`;
-  };
+  // --- NEW (INFINITE SCROLL) ---
+const fetchNewCreations = useCallback(
+  async (page) => {
+    setLoadingNew(true);
+    setErrorNew(null);
+    try {
+      const response = await latestCreations({ page });
+      const newItems = (response.data?.creations || []).map((creation) => ({
+        id: creation.creation_id,
+        _id: creation._id,
+        title: creation.title,
+        artist: creation.fullName || creation.userId?.fullName || "Unknown Artist",
+        category: creation.category,
+        image: creation.creationPicture || "/placeholder.svg",
+        likes: creation.activity?.likeCount || 0,
+        forSale: creation.forSale,
+        price: parseFloat(creation.price) || 0,
+      }));
+      setNewCreations((prev) => {
+        const existingIds = new Set(prev.map((c) => c.id));
+        const filteredNew = newItems.filter((item) => !existingIds.has(item.id));
+        return [...prev, ...filteredNew];
+      });
+      if (newItems.length < 9) setNewHasMore(false);
+      else setNewHasMore(true);
+    } catch (err) {
+      setErrorNew(err.message || "Failed to load new creations.");
+      toast.error(`Error: ${err.message || "Failed to load new creations."}`);
+      setNewHasMore(false);
+    } finally {
+      setLoadingNew(false);
+    }
+  },
+  []
+);
 
-  const handleSave = (craft) => {
-    if (!isLoggedIn) {
-      // Modified toast call for react-toastify (using toast.error for destructive/warning)
-      toast.warn("Sign in required: Please sign in to save crafts to your favorites."); 
-      return;
+
+  // First page on mount
+  useEffect(() => {
+    setNewCreations([]);
+    setNewPage(1);
+    setNewHasMore(true);
+    fetchNewCreations(1);
+    // eslint-disable-next-line
+  }, []);
+
+  // Infinite scroll observer for "New"
+  useEffect(() => {
+    if (!newHasMore || loadingNew) return;
+    const sentinel = newObserverRef.current;
+    if (!sentinel) return;
+
+    // Find the scrollable container
+    let scrollParent = sentinel.parentElement;
+    if (SCROLL_CONTAINER_SELECTOR) {
+      scrollParent = document.querySelector(SCROLL_CONTAINER_SELECTOR) || window;
     }
 
-    const wasAlreadyFavorite = isFavorite(craft.id);
+    let observer;
+    if (scrollParent && sentinel) {
+      observer = new window.IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting) {
+            setNewPage((page) => {
+              const nextPage = page + 1;
+              fetchNewCreations(nextPage);
+              return nextPage;
+            });
+          }
+        },
+        {
+          root: scrollParent === window ? null : scrollParent,
+          rootMargin: "0px",
+          threshold: 1.0,
+        }
+      );
+      observer.observe(sentinel);
+    }
+    return () => {
+      if (observer && sentinel) observer.unobserve(sentinel);
+    };
+    // eslint-disable-next-line
+  }, [newHasMore, loadingNew, fetchNewCreations]);
+
+  // --- SHARED HANDLERS ---
+  const handleAddToCart = async (item) => {
+    if (userAuth.isAuthenticated) {
+      try {
+        await addToCart(item._id, userAuth.token);
+        toast.success(`${item.title} added to cart`);
+      } catch (error) {
+        if (error.response?.status === 409) {
+          toast.info(`${item.title} is already in your cart.`);
+        } else {
+          toast.error(error.response?.data?.message || "Failed to add to cart");
+        }
+      }
+    } else {
+      const guestCartRaw = localStorage.getItem("guestCart");
+      const guestCart = guestCartRaw ? JSON.parse(guestCartRaw) : [];
+      const alreadyInCart = guestCart.some((i) => i.id === item.id);
+      if (!alreadyInCart) {
+        addToGuestCart(item);
+        toast.success(`${item.title} added to cart`);
+      } else {
+        toast.info(`${item.title} is already in your cart`);
+      }
+    }
+  };
+
+  const formatPrice = (price) => `Rs. ${Number(price).toLocaleString()}`;
+  const handleSave = (craft) => {
+    if (!userAuth.isAuthenticated) {
+      toast.warn("Sign in required: Please sign in to save crafts to your favorites.");
+      return;
+    }
     toggleFavorite(craft);
-
-    const title = wasAlreadyFavorite ? "Removed from favorites" : "Saved to favorites";
-    const description = wasAlreadyFavorite
-      ? `${craft.title} has been removed from your favorites.`
-      : `${craft.title} has been saved to your favorites.`;
-
-    // Modified toast call for react-toastify (using toast.success)
-    toast.success(`${title}: ${description}`); 
   };
 
   return (
     <div className="max-w-full space-y-2 px-2 sm:px-4">
-      {/* Add ToastContainer component here. It handles rendering all toasts */}
-      <ToastContainer 
-        position="top-right" // You can customize position, autoClose, hideProgressBar etc.
-        autoClose={3000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-      />
-
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold tracking-tight">Welcome to Craftique</h1>
@@ -154,19 +235,14 @@ export default function HomePage() {
 
       <Tabs defaultValue="featured" className="space-y-6">
         <TabsList className="w-full max-w-md mx-auto flex justify-center">
-          <TabsTrigger value="featured" className="flex-1">
-            Featured
-          </TabsTrigger>
-          <TabsTrigger value="trending" className="flex-1">
-            Trending
-          </TabsTrigger>
-          <TabsTrigger value="new" className="flex-1">
-            New
-          </TabsTrigger>
+          <TabsTrigger value="featured" className="flex-1">Featured</TabsTrigger>
+          <TabsTrigger value="trending" className="flex-1">Trending</TabsTrigger>
+          <TabsTrigger value="new" className="flex-1">New</TabsTrigger>
         </TabsList>
 
+        {/* ----- FEATURED (Single load, 12 random) ----- */}
         <TabsContent value="featured" className="space-y-6">
-          <div className="masonry-grid-improved" ref={masonryRef}>
+          <div className="masonry-grid-improved">
             {loadingFeatured ? (
               <div className="col-span-full text-center py-10">Loading featured creations...</div>
             ) : errorFeatured ? (
@@ -179,40 +255,39 @@ export default function HomePage() {
                       <img
                         src={craft.image}
                         alt={craft.title}
-                        style={{ width: '100%', height: 'auto', objectFit: 'cover' }}
+                        style={{ width: "100%", height: "auto", objectFit: "cover" }}
                         className="transition-transform duration-300 group-hover:scale-105"
                       />
-
-                      <Button
-                        size="sm"
-                        variant="default" // Force default variant to match cart button
-                        className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                        aria-label={`${isFavorite(craft.id) ? "Remove from" : "Save to"} favorites`}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleSave(craft);
-                        }}
-                      >
-                        <Heart className={`h-4 w-4 ${isFavorite(craft.id) ? "fill-current" : ""}`} />
-                      </Button>
-
-                      {craft.forSale && (
+                      <div className="absolute inset-0 z-10">
                         <Button
                           size="sm"
-                          className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                          aria-label={`Add ${craft.title} to cart`}
+                          variant="default"
+                          className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                          aria-label={`${isFavorite(craft.id) ? "Remove from" : "Save to"} favorites`}
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            toast.success(`Added to cart: ${craft.title} has been added to your cart.`);
+                            handleSave(craft);
                           }}
                         >
-                          <ShoppingCart className="h-4 w-4" />
+                          <Bookmark className={`h-4 w-4 ${isFavorite(craft.id) ? "fill-current" : ""}`} />
                         </Button>
-                      )}
-
-                      <div className="absolute inset-0 bg-red/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-4">
+                        {craft.forSale && (
+                          <Button
+                            size="sm"
+                            className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                            aria-label={`Add ${craft.title} to cart`}
+                            onClick={async (e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleAddToCart(craft);
+                            }}
+                          >
+                            <ShoppingCart className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-4">
                         <div className="text-white">
                           <h3 className="font-semibold text-lg mb-1 line-clamp-2">{craft.title}</h3>
                           <p className="text-sm text-white/90 mb-2">by {craft.artist}</p>
@@ -229,14 +304,9 @@ export default function HomePage() {
               </div>
             )}
           </div>
-
-          <div className="flex justify-center">
-            <Button variant="outline" asChild>
-              <a href="/explore">View More</a>
-            </Button>
-          </div>
         </TabsContent>
 
+        {/* ----- TRENDING (Fixed 5) ----- */}
         <TabsContent value="trending">
           <div className="space-y-6">
             {loadingTrending ? (
@@ -244,7 +314,7 @@ export default function HomePage() {
             ) : errorTrending ? (
               <div className="text-center py-12 text-red-500">{errorTrending}</div>
             ) : trendingSectionCreations.length > 0 ? (
-              <div className="masonry-grid-improved" ref={masonryRef}>
+              <div className="masonry-grid-improved">
                 {trendingSectionCreations.map((craft) => (
                   <div key={craft.id} className="masonry-item-improved group">
                     <a href={`/craft/${craft.id}`} className="block relative">
@@ -252,36 +322,38 @@ export default function HomePage() {
                         <img
                           src={craft.image}
                           alt={craft.title}
-                          style={{ width: '100%', height: 'auto', objectFit: 'cover' }}
+                          style={{ width: "100%", height: "auto", objectFit: "cover" }}
                           className="transition-transform duration-300 group-hover:scale-105"
                         />
-                        <Button
-                          size="sm"
-                          variant={isFavorite(craft.id) ? "default" : "secondary"}
-                          className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                          aria-label={`${isFavorite(craft.id) ? "Remove from" : "Save to"} favorites`}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleSave(craft);
-                          }}
-                        >
-                          <Heart className={`h-4 w-4 ${isFavorite(craft.id) ? "fill-current" : ""}`} />
-                        </Button>
-                        {craft.forSale && (
+                        <div className="absolute inset-0 z-10">
                           <Button
                             size="sm"
-                            className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                            aria-label={`Add ${craft.title} to cart`}
+                            variant="default"
+                            className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                            aria-label={`${isFavorite(craft.id) ? "Remove from" : "Save to"} favorites`}
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              toast.success(`Added to cart: ${craft.title} has been added to your cart.`);
+                              handleSave(craft);
                             }}
                           >
-                            <ShoppingCart className="h-4 w-4" />
+                            <Heart className={`h-4 w-4 ${isFavorite(craft.id) ? "fill-current" : ""}`} />
                           </Button>
-                        )}
+                          {craft.forSale && (
+                            <Button
+                              size="sm"
+                              className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                              aria-label={`Add ${craft.title} to cart`}
+                              onClick={async (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleAddToCart(craft);
+                              }}
+                            >
+                              <ShoppingCart className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
                         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-4">
                           <div className="text-white">
                             <h3 className="font-semibold text-lg mb-1 line-clamp-2">{craft.title}</h3>
@@ -302,14 +374,89 @@ export default function HomePage() {
           </div>
         </TabsContent>
 
+        {/* ----- NEW (Infinite scroll, Pinterest style) ----- */}
         <TabsContent value="new">
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">New content will appear here</p>
+          <div className="masonry-grid-improved">
+            {newCreations.length === 0 && loadingNew ? (
+              <div className="col-span-full text-center py-10">Loading new creations...</div>
+            ) : errorNew ? (
+              <div className="col-span-full text-center py-10 text-red-500">{errorNew}</div>
+            ) : newCreations.length > 0 ? (
+              newCreations.map((craft) => (
+                <div key={craft.id} className="masonry-item-improved group">
+                  <a href={`/craft/${craft.id}`} className="block relative">
+                    <div className="relative overflow-hidden rounded-lg bg-muted">
+                      <img
+                        src={craft.image}
+                        alt={craft.title}
+                        style={{ width: "100%", height: "auto", objectFit: "cover" }}
+                        className="transition-transform duration-300 group-hover:scale-105"
+                      />
+                      <div className="absolute inset-0 z-10">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                          aria-label={`${isFavorite(craft.id) ? "Remove from" : "Save to"} favorites`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleSave(craft);
+                          }}
+                        >
+                          <Bookmark className={`h-4 w-4 ${isFavorite(craft.id) ? "fill-current" : ""}`} />
+                        </Button>
+                        {craft.forSale && (
+                          <Button
+                            size="sm"
+                            className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                            aria-label={`Add ${craft.title} to cart`}
+                            onClick={async (e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleAddToCart(craft);
+                            }}
+                          >
+                            <ShoppingCart className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-4">
+                        <div className="text-white">
+                          <h3 className="font-semibold text-lg mb-1 line-clamp-2">{craft.title}</h3>
+                          <p className="text-sm text-white/90 mb-2">by {craft.artist}</p>
+                          {craft.forSale && <p className="text-lg font-bold">{formatPrice(craft.price)}</p>}
+                        </div>
+                      </div>
+                    </div>
+                  </a>
+                </div>
+              ))
+            ) : (
+              <div className="col-span-full text-center py-10">
+                <p className="text-muted-foreground">No new creations found.</p>
+              </div>
+            )}
+            {/* Sentinel for infinite scroll */}
+            {newHasMore && !loadingNew && (
+              <div
+                ref={newObserverRef}
+                style={{
+                  width: "100%",
+                  height: 40,
+                  background: "transparent",
+                  display: "block",
+                }}
+              />
+            )}
+            {loadingNew && newCreations.length > 0 && (
+              <div className="col-span-full text-center py-6">Loading more...</div>
+            )}
           </div>
         </TabsContent>
       </Tabs>
 
-      <section className="space-y-4">
+      {/* <section className="space-y-4">
         <h2 className="text-2xl font-bold tracking-tight">Explore Categories</h2>
         <div className="flex gap-3 overflow-x-auto pb-2 snap-x">
           {categories.map((category) => (
@@ -322,9 +469,9 @@ export default function HomePage() {
             </a>
           ))}
         </div>
-      </section>
+      </section> */}
 
-      {!isLoggedIn && (
+      {!userAuth.isAuthenticated && (
         <section className="rounded-lg bg-muted p-8 text-center">
           <h2 className="text-2xl font-bold mb-4">Join Our Creative Community</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto mb-6">

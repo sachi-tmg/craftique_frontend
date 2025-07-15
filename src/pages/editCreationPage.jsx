@@ -1,34 +1,241 @@
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Check, HelpCircle, ImageIcon, Loader2, Upload, X } from 'lucide-react';
-import { useContext, useRef, useState } from 'react';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Check, HelpCircle, ImageIcon, Loader2, Upload, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import { getCreationById, updateCreation, uploadCreationImage } from "../api/api";
+import { useAuth } from "../contexts/auth-context";
 
-import { useNavigate } from "react-router-dom";
-import { publishCreation, uploadCreationImage } from '../api/api';
-import { AuthContext } from '../contexts/auth-context';
+const DESCRIPTION_MAX_LENGTH = 500;
 
-// ----------- Custom Stepper -----------
-function Stepper({ step }) {
+const categories = [
+  "Pottery", "Origami", "Embroidery", "Painting", "Weaving", "Macramé",
+  "Woodworking", "Jewelry", "Knitting", "Digital Art", "Photography", "Graphic Design", "Other",
+];
+
+const CustomImage = ({ src, alt, className }) => (
+  <img src={src} alt={alt} className={className} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+);
+
+export default function EditCreationPage() {
+  const { creation_id } = useParams();
+  const navigate = useNavigate();
+  const { userAuth } = useAuth();
+
+  // Progress stepper
+  const steps = ["Details", "Preview", "Update"];
+  const [activeStep, setActiveStep] = useState(0);
+
+  // Form state
+  const [image, setImage] = useState(null);
+  const [forSale, setForSale] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [hasDimensions, setHasDimensions] = useState(true);
+  const [creationTitle, setCreationTitle] = useState("");
+  const [creationDescription, setCreationDescription] = useState("");
+  const [materialsUsed, setMaterialsUsed] = useState("");
+  const [dimensions, setDimensions] = useState("");
+  const [price, setPrice] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [error, setError] = useState(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const fileInputRef = useRef(null);
+
+  // Load existing creation
+  useEffect(() => {
+    const fetchCreation = async () => {
+      try {
+        const response = await getCreationById(creation_id);
+        if (response.data) {
+          const {
+            title,
+            des,
+            category,
+            materials,
+            dimension,
+            price,
+            forSale,
+            creationPicture,
+          } = response.data;
+          setCreationTitle(title || "");
+          setCreationDescription(des || "");
+          setSelectedCategory((category || "").toLowerCase());
+          setMaterialsUsed(materials || "");
+          setDimensions(dimension || "");
+          setPrice(price || "");
+          setForSale(forSale || false);
+          setImage(creationPicture || null);
+          setHasDimensions(
+            !["digital art", "photography", "nft", "graphic design"].includes((category || "").toLowerCase())
+          );
+        }
+      } catch (err) {
+        setError(err.message || "Failed to load creation data");
+      }
+    };
+    fetchCreation();
+  }, [creation_id]);
+
+  // HANDLERS
+
+  // --- Image ---
+  const handleAddImageClick = () => fileInputRef.current?.click();
+  const handleFileChange = async (event) => {
+    if (event.target.files && event.target.files.length > 0) {
+      const file = event.target.files[0];
+      setImageUploading(true);
+      try {
+        const formData = new FormData();
+        formData.append('creationImage', file);
+        const response = await uploadCreationImage(formData);
+        if (response.data.success) {
+          const imageUrl = response.data.filename;
+          setImage(imageUrl);
+          toast.success("Image uploaded successfully!", { position: "top-center" });
+        } else {
+          toast.error("Image upload failed." + (response.data.message || "Unknown error"));
+        }
+      } catch (error) {
+        toast.error("Failed to upload image. Please try again.", { position: "top-center" });
+      } finally {
+        setImageUploading(false);
+      }
+    }
+  };
+  const handleRemoveImage = () => {
+    setImage(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    toast.info("Image removed.", { position: "top-center" });
+  };
+
+  // --- Category ---
+  const handleCategoryChange = (category) => {
+    setSelectedCategory(category);
+    if (["digital art", "photography", "nft", "graphic design"].includes(category)) {
+      setHasDimensions(false);
+      setDimensions("");
+    } else {
+      setHasDimensions(true);
+    }
+  };
+
+  // --- Description ---
+  const handleDescriptionChange = (e) => {
+    const text = e.target.value;
+    if (text.length <= DESCRIPTION_MAX_LENGTH) {
+      setCreationDescription(text);
+    } else {
+      toast.info(`Description limited to ${DESCRIPTION_MAX_LENGTH} characters.`, {
+        position: "bottom-center",
+        autoClose: 1500,
+        hideProgressBar: true,
+      });
+    }
+  };
+
+  // --- Validation per step ---
+  const validateDetails = (showToast = false) => {
+    if (!creationTitle.trim()) {
+      if (showToast) toast.error("Please enter a title for your creation.", { position: "top-center" });
+      return false;
+    }
+    if (!creationDescription.trim()) {
+      if (showToast) toast.error("Please enter a description for your creation.", { position: "top-center" });
+      return false;
+    }
+    if (creationDescription.length > DESCRIPTION_MAX_LENGTH) {
+      if (showToast) toast.error(`Description exceeds maximum length of ${DESCRIPTION_MAX_LENGTH} characters.`, { position: "top-center" });
+      return false;
+    }
+    if (!selectedCategory) {
+      if (showToast) toast.error("Please select a category for your creation.", { position: "top-center" });
+      return false;
+    }
+    if (!materialsUsed.trim()) {
+      if (showToast) toast.error("Please enter materials used for your creation.", { position: "top-center" });
+      return false;
+    }
+    if (!image) {
+      if (showToast) toast.error("Please upload one image for your creation.", { position: "top-center" });
+      return false;
+    }
+    if (forSale) {
+      if (!price.trim() || parseFloat(price) <= 0) {
+        if (showToast) toast.error("Please enter a valid price for your creation.", { position: "top-center" });
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // --- Navigation ---
+  const handleNext = () => {
+    if (activeStep === 0 && !validateDetails(true)) return;
+    setActiveStep((step) => step + 1);
+  };
+  const handleBack = () => setActiveStep((step) => step - 1);
+
+  // --- Submit ---
+  const handleUpdate = async () => {
+    if (!validateDetails(true)) {
+      setActiveStep(0);
+      return;
+    }
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      await updateCreation(
+        creation_id,
+        {
+          title: creationTitle,
+          des: creationDescription,
+          category: selectedCategory,
+          materials: materialsUsed,
+          creationPicture: image,
+          dimension: hasDimensions ? dimensions : null,
+          price: forSale ? parseFloat(price) : 0,
+          forSale: forSale,
+        },
+        userAuth.token
+      );
+      setShowSuccessDialog(true);
+      toast.success("Your creation has been updated!", {
+        position: "top-right",
+        autoClose: 5000,
+      });
+    } catch (error) {
+      setError(error?.message || "Failed to update creation. Please try again.");
+      toast.error(error?.message || "Failed to update creation.", { position: "top-center" });
+    }
+    setIsSubmitting(false);
+  };
+
+  // --- Reset (for "Edit Another") ---
+  const resetForm = () => {
+    setActiveStep(0);
+    setShowSuccessDialog(false);
+    setError(null);
+    setIsSubmitting(false);
+  };
+
+  // --- Stepper UI ---
+
+function StepperBar({ step }) {
   const steps = [
     { label: "Details" },
     { label: "Preview" },
-    { label: "Publish" }
+    { label: "Update" }
   ];
   return (
     <div className="flex items-center justify-center gap-8 mb-8 mt-2 select-none">
@@ -60,224 +267,33 @@ function Stepper({ step }) {
   );
 }
 
-// Custom image component
-const CustomImage = ({ src, alt, className }) => (
-  <img src={src} alt={alt} className={className} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-);
-
-export function UploadPage() {
-  const [image, setImage] = useState(null);
-  const [forSale, setForSale] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [hasDimensions, setHasDimensions] = useState(true);
-  const [step, setStep] = useState(1);
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
-  const [creationTitle, setCreationTitle] = useState("");
-  const [creationDescription, setCreationDescription] = useState("");
-  const [materialsUsed, setMaterialsUsed] = useState("");
-  const [dimensions, setDimensions] = useState("");
-  const [price, setPrice] = useState("");
-  const [creationId, setCreationId] = useState(null);
-  const fileInputRef = useRef(null);
-  const navigate = useNavigate();
-const [activeStep, setActiveStep] = useState(0)
-
-  const DESCRIPTION_MAX_LENGTH = 500;
-  const { userAuth } = useContext(AuthContext);
-  const token = userAuth.token;
-
-  // --- Step validation logic
-  const canProceedDetails =
-    creationTitle.trim() &&
-    creationDescription.trim() &&
-    creationDescription.length <= DESCRIPTION_MAX_LENGTH &&
-    selectedCategory &&
-    materialsUsed.trim() &&
-    image &&
-    (!forSale || (price.trim() && parseFloat(price) > 0));
-
-  const canProceedPreview = canProceedDetails;
-
-  // --- Image functions
-  const handleAddImageClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = async (event) => {
-    if (event.target.files && event.target.files.length > 0) {
-      const file = event.target.files[0];
-      const formData = new FormData();
-      formData.append('creationImage', file);
-      try {
-        const response = await uploadCreationImage(formData);
-        if (response.data.success) {
-          const imageUrl = response.data.filename;
-          setImage(imageUrl);
-          toast.success("Image uploaded successfully!", { position: "top-center" });
-        } else {
-          toast.error("Image upload failed: " + (response.data.message || "Unknown error"));
-        }
-      } catch (error) {
-        toast.error("Failed to upload image. Please try again.", { position: "top-center" });
-      }
-    }
-  };
-
-  const handleRemoveImage = () => {
-    setImage(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-    toast.info("Image removed.", { position: "top-center" });
-  };
-
-  const handleCategoryChange = (category) => {
-    setSelectedCategory(category);
-    if (["digital art", "photography", "nft", "graphic design"].includes(category)) {
-      setHasDimensions(false);
-      setDimensions("");
-    } else {
-      setHasDimensions(true);
-    }
-  };
-
-  const handleDescriptionChange = (e) => {
-    const text = e.target.value;
-    if (text.length <= DESCRIPTION_MAX_LENGTH) {
-      setCreationDescription(text);
-    } else {
-      toast.info(`Description limited to ${DESCRIPTION_MAX_LENGTH} characters.`, {
-        position: "bottom-center",
-        autoClose: 1500,
-        hideProgressBar: true,
-      });
-    }
-  };
-
-  const handleNext = () => setStep((prev) => Math.min(prev + 1, 3));
-  const handleBack = () => setStep((prev) => Math.max(prev - 1, 1));
-
-  const handlePublish = async () => {
-    if (!canProceedPreview) {
-      setStep(1);
-      toast.error("Please fill all required fields.", { position: "top-center" });
-      return;
-    }
-    if (!token) {
-      toast.error("You must be logged in to publish a creation.", { position: "top-center" });
-      setIsPublishing(false);
-      return;
-    }
-    setIsPublishing(true);
-    let loadingToast = toast.loading("Publishing creation...");
-    const creationData = {
-      title: creationTitle,
-      des: creationDescription,
-      category: selectedCategory,
-      materials: materialsUsed,
-      creationPicture: image,
-      dimension: hasDimensions ? dimensions : null,
-      price: forSale ? parseFloat(price) : 0,
-      forSale: forSale,
-      draft: false,
-    };
-    try {
-      const res = await publishCreation(creationData, token);
-      toast.dismiss(loadingToast);
-      setIsPublishing(false);
-
-      // Try both .id and ._id, adjust as needed
-      setCreationId(res?.data?.id || res?.data?._id);
-
-      setShowSuccessDialog(true);
-      toast.success("Your creation has been successfully published!", {
-        position: "top-right",
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "light",
-      });
-    } catch (error) {
-      toast.dismiss(loadingToast);
-      setIsPublishing(false);
-      const errorMessage = error?.response?.data?.message || error?.message || "An error occurred while publishing your creation.";
-      toast.error(errorMessage, { position: "top-center" });
-    }
-  };
-
-  const handleViewCreation = () => {
-    setShowSuccessDialog(false);
-    if (creationId) {
-      navigate(`/craft/${creationId}`);
-    } else {
-      toast.error("Unable to find the new creation ID.", { position: "top-center" });
-    }
-  };
-
-  const resetForm = () => {
-  setImage(null);
-  setForSale(false);
-  setSelectedCategory("");
-  setHasDimensions(true);
-  setActiveStep(0); // If you’re using stepper
-  setIsPublishing(false);
-  setShowSuccessDialog(false);
-  setCreationTitle("");
-  setCreationDescription("");
-  setMaterialsUsed("");
-  setDimensions("");
-  setPrice("");
-  setCreationId(null);
-  if (fileInputRef.current) {
-    fileInputRef.current.value = "";
-  }
-};
-
-
-  const categories = [
-    "Pottery", "Origami", "Embroidery", "Painting", "Weaving", "Macramé",
-    "Woodworking", "Jewelry", "Knitting", "Digital Art", "Photography", "Graphic Design", "Other",
-  ];
-
+  // UI
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Upload Creation</h1>
-        <p className="text-muted-foreground">Share your handmade creation with the Craftique community</p>
+        <h1 className="text-3xl font-bold tracking-tight">Edit Creation</h1>
+        <p className="text-muted-foreground">Update your creation’s info and image</p>
       </div>
 
-      <Stepper step={step} />
+      {/* Progress Bar */}
+      <StepperBar step={activeStep + 1} />
 
-      {/* --- Step 1: Details --- */}
-      {step === 1 && (
+      {/* STEP 1: DETAILS */}
+      {activeStep === 0 && (
         <>
           <Card>
             <CardContent className="p-6">
               <div className="space-y-4">
                 <h2 className="text-xl font-semibold">Upload Image</h2>
-                <p className="text-sm text-muted-foreground">
-                  Upload a high-quality image of your creation. Only one image is allowed.
-                </p>
                 <div className="grid grid-cols-1 gap-4">
                   {image ? (
                     <div className="relative aspect-video overflow-hidden rounded-md border">
-                      <CustomImage
-                        src={image}
-                        alt="Uploaded creation image"
-                        className="object-cover"
-                      />
+                      <CustomImage src={image} alt="Uploaded creation image" className="object-cover" />
                       <Button
                         variant="destructive"
                         size="icon"
                         className="absolute right-1 top-1 h-6 w-6"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRemoveImage();
-                        }}
+                        onClick={handleRemoveImage}
                       >
                         <X className="h-4 w-4" />
                       </Button>
@@ -400,13 +416,6 @@ const [activeStep, setActiveStep] = useState(0)
                     </div>
                   )}
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="space-y-4">
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="for-sale"
@@ -433,21 +442,21 @@ const [activeStep, setActiveStep] = useState(0)
             </CardContent>
           </Card>
 
-          <div className="flex justify-end mt-3">
-            <Button onClick={handleNext} disabled={!canProceedDetails}>Continue to Preview</Button>
+          <div className="flex justify-end">
+            <Button onClick={handleNext}>Continue to Preview</Button>
           </div>
         </>
       )}
 
-      {/* --- Step 2: Preview --- */}
-      {step === 2 && (
+      {/* STEP 2: PREVIEW */}
+      {activeStep === 1 && (
         <>
           <Card>
             <CardContent className="p-6">
               <div className="space-y-4 text-center">
                 <h2 className="text-xl font-semibold">Preview Your Creation</h2>
                 <p className="text-sm text-muted-foreground">
-                  This is how your primary image will appear to others on Craftique.
+                  This is how your image will appear to others on Craftique.
                 </p>
                 <div className="mx-auto max-w-md overflow-hidden rounded-lg border">
                   <div className="aspect-square relative">
@@ -460,37 +469,32 @@ const [activeStep, setActiveStep] = useState(0)
                     )}
                   </div>
                 </div>
-                <div className="mt-6 text-left">
-                  <div className="font-bold">Title:</div> <div>{creationTitle}</div>
-                  <div className="font-bold mt-2">Description:</div> <div>{creationDescription}</div>
-                  <div className="font-bold mt-2">Category:</div> <div>{selectedCategory}</div>
-                  <div className="font-bold mt-2">Materials Used:</div> <div>{materialsUsed}</div>
-                  {hasDimensions && (
-                    <>
-                      <div className="font-bold mt-2">Dimensions:</div> <div>{dimensions}</div>
-                    </>
-                  )}
+                <div className="mt-4 text-left">
+                  <div className="text-lg font-bold">{creationTitle}</div>
+                  <div className="text-gray-600">{creationDescription}</div>
+                  <div className="text-sm mt-2">Category: {selectedCategory}</div>
+                  <div className="text-sm">Materials: {materialsUsed}</div>
+                  <div className="text-sm">Dimensions: {hasDimensions ? (dimensions || "N/A") : "N/A"}</div>
                   {forSale && (
-                    <>
-                      <div className="font-bold mt-2">Price (Rs):</div> <div>{price}</div>
-                    </>
+                    <div className="text-sm font-semibold text-green-700 mt-1">
+                      Price: Rs {price}
+                    </div>
                   )}
                 </div>
               </div>
             </CardContent>
           </Card>
-
-          <div className="flex justify-between mt-3">
+          <div className="flex justify-between">
             <Button variant="outline" onClick={handleBack}>
               Back to Details
             </Button>
-            <Button onClick={handleNext}>Continue to Publish</Button>
+            <Button onClick={handleNext}>Continue to Update</Button>
           </div>
         </>
       )}
 
-      {/* --- Step 3: Publish --- */}
-      {step === 3 && (
+      {/* STEP 3: UPDATE */}
+      {activeStep === 2 && (
         <>
           <Card>
             <CardContent className="p-6">
@@ -498,9 +502,9 @@ const [activeStep, setActiveStep] = useState(0)
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
                   <Upload className="h-6 w-6 text-primary" />
                 </div>
-                <h2 className="text-xl font-semibold">Ready to Publish</h2>
+                <h2 className="text-xl font-semibold">Ready to Update</h2>
                 <p className="text-sm text-muted-foreground">
-                  Your creation is ready to be shared with the Craftique community
+                  Review your creation and click Update to save changes.
                 </p>
                 <div className="mx-auto max-w-md space-y-4 pt-4">
                   <div className="flex items-center justify-between rounded-md border p-3">
@@ -508,7 +512,7 @@ const [activeStep, setActiveStep] = useState(0)
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
                         <Check className="h-4 w-4 text-primary" />
                       </div>
-                      <span>Creation details completed</span>
+                      <span>Details completed</span>
                     </div>
                   </div>
                   <div className="flex items-center justify-between rounded-md border p-3">
@@ -531,32 +535,38 @@ const [activeStep, setActiveStep] = useState(0)
               </div>
             </CardContent>
           </Card>
-
-          <div className="flex justify-between mt-3">
+          <div className="flex justify-between">
             <Button variant="outline" onClick={handleBack}>
               Back to Preview
             </Button>
-            <Button onClick={handlePublish} disabled={isPublishing}>
-              {isPublishing ? (
+            <Button onClick={handleUpdate} disabled={isSubmitting}>
+              {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Publishing...
+                  Updating...
                 </>
               ) : (
-                "Publish Creation"
+                "Update Creation"
               )}
             </Button>
           </div>
         </>
       )}
 
+      {/* Error Message */}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+          <p className="text-sm text-red-600">{error}</p>
+        </div>
+      )}
+
       {/* Success Dialog */}
       <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Creation Published Successfully!</DialogTitle>
+            <DialogTitle>Creation Updated Successfully!</DialogTitle>
             <DialogDescription>
-              Your creation "{creationTitle || "Handcrafted Item"}" has been published and is now visible to the
+              Your creation "{creationTitle || "Handcrafted Item"}" has been updated and is now visible to the
               Craftique community.
             </DialogDescription>
           </DialogHeader>
@@ -566,10 +576,10 @@ const [activeStep, setActiveStep] = useState(0)
             </div>
           </div>
           <DialogFooter className="sm:justify-center">
-            <Button variant="outline" onClick={() => window.location.reload()}>
-              Create Another
+            <Button variant="outline" onClick={resetForm}>
+              Edit Another
             </Button>
-            <Button onClick={handleViewCreation}>View Your Creation</Button>
+            <Button onClick={() => navigate(`/craft/${creation_id}`)}>View Your Creation</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

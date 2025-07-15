@@ -1,36 +1,35 @@
+import { Bookmark, ChevronDown, ChevronRight, Heart, MoreVertical, Zap } from 'lucide-react';
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { getCreationById } from "../api/api";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { toast } from 'react-toastify';
+import { checkLikeStatus, deleteCreation, getComments, getCreationById, postComment, toggleCommentLike, toggleLike } from "../api/api";
 import { getDay } from "../common/date";
+import { useAuth } from "../contexts/auth-context";
+import { useFavorites } from "../contexts/favorites-context";
 
-// Import Lucide React icons for Shadcn UI
-import { Heart, ShoppingCart, ThumbsUp } from 'lucide-react';
-
-// Assuming ThemeContext for theme toggling is available
-
-// You would likely have a FavoritesContext if you implement favoriting
-// import { useFavorites } from "../contexts/favorites-context";
-
-// This component will display the details of a single craft.
 export default function CraftDetailPage() {
-  const { craftId } = useParams(); // Get the craft ID from the URL parameter (e.g., /craft/123)
-
-  // State to hold the fetched craft data
+  const { craftId } = useParams();
+  const navigate = useNavigate();
+  const { userAuth } = useAuth();
+  const { toggleFavorite, isFavorite } = useFavorites();
+  
   const [craft, setCraft] = useState(null);
-  // State for loading status
   const [loading, setLoading] = useState(true);
-  // State for error messages
   const [error, setError] = useState(null);
-
-  // State for managing comments (these would ideally be fetched from a separate API or included in the craft detail)
   const [comments, setComments] = useState([]);
   const [newCommentText, setNewCommentText] = useState("");
+  const [isLiked, setIsLiked] = useState(false);
+  const [likeLoading, setLikeLoading] = useState(false);
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [commentLoading, setCommentLoading] = useState(false);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [replyText, setReplyText] = useState("");
+  const [expandedReplies, setExpandedReplies] = useState({});
 
-  // Get current theme from context for conditional styling (e.g., icon colors)
-  // const { theme } = useContext(ThemeContext); // Uncomment if ThemeContext is available
-
-  // You would use your FavoritesContext here if available
-  // const { toggleFavorite, isFavorite } = useFavorites();
+  // Check if current user is the creator of this craft
+  const isCreator = userAuth.isAuthenticated && craft?.username === userAuth.username;
 
   useEffect(() => {
     const fetchCraft = async () => {
@@ -38,96 +37,353 @@ export default function CraftDetailPage() {
       setError(null);
 
       try {
-        console.log("Frontend (CraftDetailPage): Attempting to fetch with craftId:", craftId);
         const response = await getCreationById(craftId);
-        console.log("Frontend (CraftDetailPage): Full response from API:", response);
-
+        
         if (response && response.data) {
-          console.log("Frontend (CraftDetailPage): Received valid response data:", response.data);
           const fetchedData = response.data;
-
-          // Mapping fetchedData to a consistent 'craft' state structure
           const mappedCraft = {
+            _id: fetchedData._id,
             creation_id: fetchedData.creation_id,
             title: fetchedData.title,
-            des: fetchedData.des, // Model uses 'des' for description
+            des: fetchedData.des,
             category: fetchedData.category,
             price: fetchedData.price,
             forSale: fetchedData.forSale,
-            materials: fetchedData.materials, // Model specifies 'materials' as String
-            dimension: fetchedData.dimension || null, // Model specifies 'dimension' as String, can be null
-            // Directly use 'creationPicture' from fetchedData
-            creationPicture: fetchedData.creationPicture || "/placeholder.svg", // Use singular 'creationPicture'
-            activity: fetchedData.activity, // Keep activity object as is
-            dateCreated: getDay(fetchedData.dateCreated), // Assuming getDay formats date
-            tags: fetchedData.tags || [], // If 'tags' field might be missing or null, default to an empty array
-            fullName: fetchedData.fullName, // From populated user
-            username: fetchedData.username, // From populated user
-            profilePicture: fetchedData.profilePicture, // From populated user
-            artistBio: fetchedData.artistBio || null, // Assuming 'artistBio' is populated from user model, default to null if not present
-            email: fetchedData.email, // From populated user
+            materials: fetchedData.materials,
+            dimension: fetchedData.dimension || null,
+            creationPicture: fetchedData.creationPicture || "/placeholder.svg",
+            activity: fetchedData.activity,
+            dateCreated: getDay(fetchedData.dateCreated),
+            tags: fetchedData.tags || [],
+            fullName: fetchedData.fullName,
+            username: fetchedData.username,
+            profilePicture: fetchedData.profilePicture,
+            artistBio: fetchedData.artistBio || null,
+            email: fetchedData.email,
           };
           setCraft(mappedCraft);
+      
+          // Add this check if user is authenticated
+          if (userAuth.isAuthenticated) {
+            const likeStatus = await checkLikeStatus(fetchedData.creation_id, userAuth.token);
+            setIsLiked(likeStatus.isLiked);
+          }
         } else {
-          console.warn("Frontend (CraftDetailPage): Response or response.data is invalid.", { response });
           throw new Error("Craft data not found or invalid response structure.");
         }
       } catch (err) {
-        console.error("Frontend (CraftDetailPage): Failed to fetch craft details:", err);
+        console.error("Failed to fetch craft details:", err);
         setError(err.message || "Failed to load craft details. Please try again.");
       } finally {
         setLoading(false);
       }
     };
 
-    if (craftId) { // Ensure craftId is available before fetching
+    if (craftId) {
       fetchCraft();
     }
-  }, [craftId]); // Dependency array to re-run effect when craftId changes
+  }, [craftId]);
 
-  // --- UI Interaction Handlers (Placeholders for Backend Calls) ---
-
-  const handleLike = () => {
-    if (!craft) return;
-    console.log("Like button clicked for craft:", craft.creation_id); // Use creation_id from mappedCraft
-    // TODO: Implement actual API call to like the craft
-    // On successful API response:
-    // setCraft(prev => ({ ...prev, activity: { ...prev.activity, likeCount: prev.activity.likeCount + 1 } }));
+  useEffect(() => {
+  const handleClickOutside = (e) => {
+    if (isMenuOpen && !e.target.closest('.relative')) {
+      setIsMenuOpen(false);
+    }
   };
 
-  const handleSave = () => {
-    if (!craft) return;
-    console.log("Save (favorite) button clicked for craft:", craft.creation_id); // Use creation_id from mappedCraft
-    // TODO: Implement actual API call to save/unsave the craft
-    // You would use useFavorites() context here for frontend state update
-    // toggleFavorite(craft);
+  document.addEventListener('click', handleClickOutside);
+  return () => document.removeEventListener('click', handleClickOutside);
+}, [isMenuOpen]);
+
+  useEffect(() => {
+    const checkInitialLikeStatus = async () => {
+      if (userAuth.isAuthenticated && craft?._id) {
+        try {
+          setLikeLoading(true);
+          const { isLiked } = await checkLikeStatus(craft.creation_id, userAuth.token);
+          setIsLiked(isLiked);
+        } catch (error) {
+          console.error("Failed to check like status:", error);
+        } finally {
+          setLikeLoading(false);
+        }
+      }
+    };
+
+    checkInitialLikeStatus();
+  }, [craft?._id, userAuth]);
+
+useEffect(() => {
+    const fetchComments = async () => {
+        if (craft && userAuth.isAuthenticated) {
+            try {
+                const commentsData = await getComments(craft.creation_id);
+
+                // Normalize liked_by IDs to strings and inject
+                const normalized = commentsData.map(comment => ({
+                    ...comment,
+                    liked_by: (comment.liked_by || []).map(id => id.toString()),
+                    children: (comment.children || []).map(child => ({
+                        ...child,
+                        liked_by: (child.liked_by || []).map(id => id.toString())
+                    }))
+                }));
+
+                setComments(normalized);
+            } catch (error) {
+                console.error("Failed to fetch comments:", error);
+                toast.error("Failed to load comments");
+            }
+        }
+    };
+
+    fetchComments();
+}, [craft, userAuth]);
+
+  // Add delete handler
+  const handleDelete = async () => {
+    if (!window.confirm("Are you sure you want to delete this craft? This action cannot be undone.")) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await deleteCreation(craftId, userAuth.token);
+      navigate(`/profile/${userAuth.username}`);
+    } catch (error) {
+      console.error("Error deleting craft:", error);
+      setError("Failed to delete craft. Please try again.");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
-  const handleAddToCart = () => {
-    if (!craft) return;
-    console.log("Add to Cart button clicked for craft:", craft.creation_id); // Use creation_id from mappedCraft
-    // TODO: Implement actual API call to add craft to cart
+  // Add edit handler - redirect to edit page
+  const handleEdit = () => {
+    navigate(`/edit-creation/${craftId}`);
   };
 
-  const handleCommentSubmit = (e) => {
+  
+const handleLike = async () => {
+  console.log('[DEBUG] handleLike triggered'); // 1. Start of function
+  if (!userAuth.isAuthenticated) {
+    console.log('[DEBUG] User not authenticated, showing toast');
+    toast.error("Please sign in to like creations");
+    return;
+  }
+
+  try {
+    setLikeLoading(true);
+    console.log('[DEBUG] Calling toggleLike with:', {
+      creationId: craft._id || craft.creation_id,
+      token: userAuth.token ? 'exists' : 'missing' // Don't log actual token
+    });
+    
+    const response = await toggleLike(craft.creation_id, userAuth.token);
+    
+    console.log('[DEBUG] toggleLike response:', response);
+    setIsLiked(response.likedByUser);
+    setCraft(prev => ({
+      ...prev,
+      activity: {
+        ...prev.activity,
+        likeCount: response.likeCount
+      }
+    }));
+  } catch (error) {
+    console.error('[DEBUG] Error in handleLike:', {
+      error: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    toast.error("Failed to toggle like");
+  } finally {
+    console.log('[DEBUG] Like operation completed');
+    setLikeLoading(false);
+  }
+};
+
+const handleSave = (craft) => {
+  if (!userAuth.isAuthenticated) {
+    toast.warn("Sign in required: Please sign in to save crafts to your favorites.");
+    return;
+  }
+  // Pass the WHOLE craft object, just like HomePage does!
+  toggleFavorite({
+    ...craft,
+    id: craft.creation_id, // Ensure both `id` (creation_id) and `_id` (ObjectId) are present
+    _id: craft._id,
+  });
+};
+
+
+
+  const handleBuyNow = () => {
+    if (!craft) return;
+    // Optionally, check authentication before proceeding
+    if (!userAuth.isAuthenticated) {
+      toast.error("You need to be logged in to buy");
+      navigate('/login');
+      return;
+    }
+    // Go to checkout with just this item
+    navigate('/checkout', { state: { buyNowItem: { 
+      _id: craft._id,
+      title: craft.title,
+      artist: craft.fullName,
+      image: craft.creationPicture,
+      price: parseFloat(craft.price),
+      quantity: 1, // optional
+    }}});
+
+  };
+
+// Handle comment submission
+const handleCommentSubmit = async (e) => {
     e.preventDefault();
-    if (!newCommentText.trim()) return; // Prevent empty comments
+    if (!newCommentText.trim() || !userAuth.isAuthenticated) {
+        toast.error("Please sign in to comment");
+        return;
+    }
 
-    console.log("Submitting new comment:", newCommentText);
-    // TODO: Implement API call to post comment
-    // On successful API response:
-    // setComments(prevComments => [...prevComments, { id: Date.now(), user: { name: "You", username: "currentuser", avatar: "/path/to/my/avatar.jpg" }, content: newCommentText, timestamp: "Just now", likes: 0, isLiked: false }]);
-    setNewCommentText(""); // Clear input after submission
-  };
+    try {
+        setCommentLoading(true);
+        const newComment = await postComment(
+            craft.creation_id,
+            newCommentText,
+            userAuth.token
+        );
+        
+        setComments(prev => [{
+            ...newComment,
+            commented_by: {
+                _id: userAuth.userId,
+                username: userAuth.username,
+                profilePicture: userAuth.profilePicture,
+                fullName: userAuth.fullName
+            },
+            children: [],
+            likes: 0,
+            liked_by: [],
+            dateCommented: new Date().toISOString()
+        }, ...prev]);
+        
+        setNewCommentText("");
+        toast.success("Comment posted!");
+    } catch (error) {
+        console.error("Error posting comment:", error);
+        toast.error("Failed to post comment");
+    } finally {
+        setCommentLoading(false);
+    }
+};
 
-  const handleCommentLike = (commentId) => {
-    console.log(`Liking comment: ${commentId}`);
-    // TODO: Implement API call to like a specific comment
-    // On successful API response:
-    // setComments(prevComments => prevComments.map(comment =>
-    //   comment.id === commentId ? { ...comment, isLiked: !comment.isLiked, likes: comment.isLiked ? comment.likes - 1 : comment.likes + 1 } : comment
-    // ));
-  };
+// Handle reply submission
+const handleReplySubmit = async (parentCommentId) => {
+    if (!replyText.trim() || !userAuth.isAuthenticated) {
+        toast.error("Please sign in to reply");
+        return;
+    }
+
+    try {
+        setCommentLoading(true);
+        const newReply = await postComment(
+            craft.creation_id,
+            replyText,
+            userAuth.token,
+            parentCommentId
+        );
+        
+        setComments(prev => prev.map(comment => {
+            if (comment._id === parentCommentId) {
+                return {
+                    ...comment,
+                    children: [
+                        ...(comment.children || []),
+                        {
+                            ...newReply,
+                            commented_by: {
+                                _id: userAuth.userId,
+                                username: userAuth.username,
+                                profilePicture: userAuth.profilePicture,
+                                fullName: userAuth.fullName
+                            },
+                            likes: 0,
+                            liked_by: [],
+                            dateCommented: new Date().toISOString()
+                        }
+                    ]
+                };
+            }
+            return comment;
+        }));
+        
+        setReplyingTo(null);
+        setReplyText("");
+        toast.success("Reply posted!");
+    } catch (error) {
+        console.error("Error posting reply:", error);
+        toast.error("Failed to post reply");
+    } finally {
+        setCommentLoading(false);
+    }
+};
+
+const handleCommentLike = async (commentId) => {
+    if (!userAuth.isAuthenticated) {
+        toast.error("Please sign in to like comments");
+        return;
+    }
+
+    try {
+        const response = await toggleCommentLike(commentId, userAuth.token);
+        
+        setComments(prev => prev.map(comment => {
+            // Update top-level comment
+            if (comment._id === commentId) {
+                return {
+                    ...comment,
+                    likes: response.likeCount,
+                    liked_by: response.likedByUser 
+                      ? Array.from(new Set([...comment.liked_by.map(String), String(userAuth.userId)]))
+                      : comment.liked_by.map(String).filter(id => id !== String(userAuth.userId))
+
+                };
+            }
+
+            // Update reply inside children
+            if (comment.children && comment.children.some(child => child._id === commentId)) {
+                return {
+                    ...comment,
+                    children: comment.children.map(child => 
+                        child._id === commentId
+                            ? {
+                                ...child,
+                                likes: response.likeCount,
+                                liked_by: response.likedByUser 
+                                    ? [...child.liked_by, userAuth.userId]
+                                    : child.liked_by.filter(id => id !== userAuth.userId)
+                            }
+                            : child
+                    )
+                };
+            }
+
+            return comment;
+        }));
+    } catch (error) {
+        console.error("Error liking comment:", error);
+        toast.error("Failed to like comment");
+    }
+};
+
+
+const toggleReplies = (commentId) => {
+  setExpandedReplies(prev => ({
+    ...prev,
+    [commentId]: !prev[commentId]
+  }));
+};
 
   // --- Loading, Error, and Not Found UI ---
   if (loading) {
@@ -157,6 +413,7 @@ export default function CraftDetailPage() {
   // --- Destructure properties from the fetched craft object for cleaner JSX ---
   // Ensure names match the 'mappedCraft' object exactly.
   const {
+    creation_id,
     title,
     des,
     category,
@@ -190,33 +447,83 @@ export default function CraftDetailPage() {
         {/* Left Section: Image Gallery */}
         <div className="flex-1">
           <div className="bg-gray-100 rounded-lg overflow-hidden shadow-md">
-            {/* Display the main image. Use singular `creationPicture`. */}
             <img
-              src={creationPicture} // Directly use creationPicture
+              src={creationPicture}
               alt={title}
               className="w-full h-auto object-cover max-h-[600px] rounded-lg"
             />
           </div>
-          {/* Removed the thumbnail gallery as we are only expecting one picture */}
-          {/* If you add support for multiple pictures in the future, you'd reintroduce this. */}
         </div>
 
         {/* Right Section: Details */}
         <div className="flex-1 space-y-6">
-          <div className="flex items-center justify-between">
+          {/* Title and Action Buttons Row */}
+          <div className="flex justify-between items-start gap-4">
+            {/* Title */}
             <h1 className="text-3xl font-bold text-gray-900">{title}</h1>
-            <div className="flex gap-2">
-              <button
-                onClick={handleSave}
-                className="p-2 rounded-full bg-gray-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                aria-label="Save to favorites"
+            {/* Action Buttons Row */}
+            <div className="flex items-center gap-4 mt-4">
+              {/* Like Button */}
+              <button 
+                onClick={handleLike}
+                disabled={likeLoading || !userAuth.isAuthenticated}
+                className="flex items-center gap-1 group"
+                aria-label={isLiked ? "Unlike" : "Like"}
               >
-                {/* Shadcn/Lucide Heart icon */}
-                <Heart
-                  className={`w-6 h-6 ${isCurrentlyFavorited ? 'fill-primary text-primary' : (theme === 'light' ? 'text-gray-600' : 'text-gray-400')}`}
-                />
+                <Heart className={`w-6 h-6 ${
+                  isLiked 
+                    ? 'fill-red-500 text-red-500' 
+                    : 'text-gray-400 group-hover:text-red-500'
+                }`}/>
+                <span className="text-sm">{craft?.activity?.likeCount || 0}</span>
               </button>
-              {/* Add a share button here if desired */}
+
+              {/* Save Button */}
+              <button
+                onClick={() => handleSave(craft)}
+                className="p-2 rounded-full hover:bg-gray-100"
+                aria-label={isFavorite(craft.creation_id) ? "Remove from favorites" : "Add to favorites"}
+              >
+                <Bookmark className={`w-5 h-5 ${isFavorite(craft.creation_id) ? "fill-primary text-primary" : "text-gray-400 hover:text-primary"}`} />
+              </button>
+
+              {/* Dropdown Menu for Edit/Delete (only shown to creator) */}
+              {isCreator && (
+                <div className="relative">
+                  <button
+                    onClick={() => setIsMenuOpen(!isMenuOpen)}
+                    className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+                    aria-label="More options"
+                  >
+                    <MoreVertical className="w-5 h-5 text-gray-600" />
+                  </button>
+                  
+                  {isMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
+                      <div className="py-1">
+                        <button
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            handleEdit();
+                          }}
+                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            handleDelete();
+                          }}
+                          className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -303,7 +610,6 @@ export default function CraftDetailPage() {
           {/* Likes and Date Created */}
           <div className="flex items-center gap-4 text-gray-600 text-sm">
             <span className="flex items-center gap-1">
-              {/* Shadcn/Lucide Heart icon for likes display */}
               <Heart className="w-5 h-5 text-primary" strokeWidth={1.5} />
               {likeCount} likes
             </span>
@@ -312,13 +618,12 @@ export default function CraftDetailPage() {
 
           {forSale && (
             <button
-              onClick={handleAddToCart}
+              onClick={handleBuyNow}
               className="w-full bg-primary text-white py-3 rounded-lg text-lg font-semibold hover:bg-primary/90 transition-colors duration-200 flex items-center justify-center gap-2"
-              aria-label="Add to cart"
+              aria-label="Buy now"
             >
-              {/* Shadcn/Lucide ShoppingCart icon */}
-              <ShoppingCart className="w-5 h-5" />
-              Add to Cart
+              <Zap className="w-5 h-5" />
+              Buy Now
             </button>
           )}
         </div>
@@ -327,62 +632,210 @@ export default function CraftDetailPage() {
       {/* Comments Section */}
       <div className="mt-12 space-y-6">
         <hr className="border-gray-200" />
-        <h2 className="text-2xl font-bold text-gray-900">Comments ({comments.length})</h2>
+        <h2 className="text-2xl font-bold text-gray-900">
+            Comments ({comments.reduce((acc, comment) => acc + 1 + (comment.children?.length || 0), 0)})
+        </h2>
 
         {/* New Comment Input */}
         <div className="flex gap-4 items-start">
-          {/* Ensure profilePicture is used from craft or default if it's the current user's profile picture */}
-          <img src={profilePicture || "/placeholder.svg"} alt="User Avatar" className="w-10 h-10 rounded-full object-cover" />
-          <form onSubmit={handleCommentSubmit} className="flex-1 flex flex-col gap-2">
-            <textarea
-              name="commentInput"
-              placeholder="Add a comment..."
-              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              rows="3"
-              value={newCommentText}
-              onChange={(e) => setNewCommentText(e.target.value)}
-            ></textarea>
-            <button
-              type="submit"
-              className="self-end bg-primary text-white px-5 py-2 rounded-lg font-semibold hover:bg-primary/90 transition-colors"
-            >
-              Post Comment
-            </button>
-          </form>
+            <img 
+                src={userAuth.profilePicture || "/placeholder.svg"} 
+                alt="Your profile" 
+                className="w-10 h-10 rounded-full object-cover" 
+            />
+            <form onSubmit={handleCommentSubmit} className="flex-1 flex flex-col gap-2">
+                <textarea
+                    placeholder="Add a comment..."
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    rows="3"
+                    value={newCommentText}
+                    onChange={(e) => setNewCommentText(e.target.value)}
+                    disabled={commentLoading}
+                    onKeyDown={e => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (newCommentText.trim()) handleCommentSubmit(e);
+                    }
+                  }}
+                />
+                <button
+                    type="submit"
+                    className="self-end bg-primary text-white px-5 py-2 rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
+                    disabled={!newCommentText.trim() || commentLoading}
+                >
+                    {commentLoading ? "Posting..." : "Post Comment"}
+                </button>
+            </form>
         </div>
 
-        {/* Existing Comments List - Currently not fetched, but ready for dynamic data */}
+        {/* Comments List */}
         <div className="space-y-4">
-          {comments.length > 0 ? (
-            comments.map((comment) => (
-              <div key={comment.id} className="flex gap-4 items-start border-b border-gray-100 pb-4 last:border-b-0">
-                <img src={comment.user.avatar || "/placeholder.svg"} alt={comment.user.name} className="w-10 h-10 rounded-full object-cover" />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-gray-900">{comment.user.name}</span>
-                    <span className="text-sm text-gray-600">@{comment.user.username}</span>
-                    <span className="text-sm text-gray-500 ml-auto">{comment.timestamp}</span>
-                  </div>
-                  <p className="mt-1 text-gray-700">{comment.content}</p>
-                  <div className="flex items-center gap-4 mt-2">
-                    <button
-                      onClick={() => handleCommentLike(comment.id)}
-                      className={`flex items-center gap-1 text-sm ${comment.isLiked ? 'text-primary' : 'text-gray-600'} hover:text-primary`}
-                    >
-                      {/* Shadcn/Lucide ThumbsUp icon */}
-                      <ThumbsUp className="w-4 h-4" fill={comment.isLiked ? "currentColor" : "none"} />
-                      {comment.likes > 0 && comment.likes}
-                    </button>
-                    <button className="text-sm text-gray-600 hover:text-gray-800">Reply</button>
-                  </div>
+            {comments.length > 0 ? (
+                comments.map((comment) => (
+                    <div key={comment._id} className="flex gap-4 items-start border-b border-gray-100 pb-4 last:border-b-0">
+                        <img 
+                            src={comment.commented_by?.profilePicture || "/placeholder.svg"} 
+                            alt={comment.commented_by?.fullName || comment.commented_by?.username} 
+                            className="w-10 h-10 rounded-full object-cover" 
+                        />
+                        <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                                <span className="font-semibold text-gray-900">
+                                    {comment.commented_by?.fullName || comment.commented_by?.username}
+                                </span>
+                                <span className="text-sm text-gray-600">
+                                    @{comment.commented_by?.username}
+                                </span>
+                                <span className="text-sm text-gray-500 ml-auto">
+                                    {new Date(comment.dateCommented).toLocaleString()}
+                                </span>
+                            </div>
+                            <p className="mt-1 text-gray-700">{comment.comment}</p>
+                            <div className="flex items-center gap-4 mt-2">
+                                {/* Inside your comment rendering */}
+                                <button
+                                    onClick={() => handleCommentLike(comment._id)}
+                                    disabled={commentLoading}
+                                    className="flex items-center gap-1 group"
+                                    aria-label={comment.liked_by?.includes(userAuth.userId) ? "Unlike" : "Like"}
+                                >
+                                    <Heart className={`w-5 h-5 ${
+                                        comment.liked_by?.includes(userAuth.userId)
+                                            ? 'fill-red-500 text-red-500' 
+                                            : 'text-gray-400 group-hover:text-red-500'
+                                    }`}/>
+                                    {comment.likes > 0 && (
+                                        <span className="text-sm">{comment.likes}</span>
+                                    )}
+                                </button>
+
+                                <button 
+                                    onClick={() => setReplyingTo(replyingTo === comment._id ? null : comment._id)}
+                                    className="text-sm text-gray-600 hover:text-gray-800"
+                                    disabled={commentLoading}
+                                >
+                                    Reply
+                                </button>
+                            </div>
+                            
+                            {/* Reply form */}
+                            {replyingTo === comment._id && (
+                                <div className="mt-4 flex gap-4 items-start">
+                                    <img 
+                                        src={userAuth.profilePicture || "/placeholder.svg"} 
+                                        alt="Your profile" 
+                                        className="w-8 h-8 rounded-full object-cover" 
+                                    />
+                                    <div className="flex-1 flex flex-col gap-2">
+                                        <textarea
+                                            placeholder="Write a reply..."
+                                            className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary"
+                                            rows="2"
+                                            value={replyText}
+                                            onChange={(e) => setReplyText(e.target.value)}
+                                            disabled={commentLoading}
+                                            onKeyDown={e => {
+                                            if (e.key === "Enter" && !e.shiftKey) {
+                                              e.preventDefault();
+                                              if (replyText.trim()) handleReplySubmit(comment._id);
+                                            }
+                                          }}
+                                        />
+                                        <div className="flex gap-2 self-end">
+                                            <button
+                                                onClick={() => setReplyingTo(null)}
+                                                className="px-3 py-1 text-gray-600 hover:text-gray-800"
+                                                disabled={commentLoading}
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                onClick={() => handleReplySubmit(comment._id)}
+                                                className="px-3 py-1 bg-primary text-white rounded disabled:opacity-50"
+                                                disabled={!replyText.trim() || commentLoading}
+                                            >
+                                                {commentLoading ? "Posting..." : "Post Reply"}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {/* Replies section with collapsible functionality */}
+                            {comment.children && comment.children.length > 0 && (
+                                <div className="mt-2">
+                                    <button 
+                                        onClick={() => toggleReplies(comment._id)}
+                                        className="text-sm text-gray hover:underline flex items-center gap-1"
+                                    >
+                                        {expandedReplies[comment._id] ? (
+                                            <>
+                                                <ChevronDown className="w-4 h-4" /> Hide replies
+                                            </>
+                                        ) : (
+                                            <>
+                                                <ChevronRight className="w-4 h-4" /> 
+                                                Show {comment.children.length} {comment.children.length === 1 ? 'reply' : 'replies'}
+                                            </>
+                                        )}
+                                    </button>
+                                    
+                                    {expandedReplies[comment._id] && (
+                                        <div className="mt-2 pl-6 border-l-2 border-gray-200 space-y-4">
+                                            {comment.children.map(reply => (
+                                                <div key={reply._id} className="flex gap-3 items-start pt-4">
+                                                    <img 
+                                                        src={reply.commented_by?.profilePicture || "/placeholder.svg"} 
+                                                        alt={reply.commented_by?.fullName || reply.commented_by?.username} 
+                                                        className="w-8 h-8 rounded-full object-cover" 
+                                                    />
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-medium text-gray-900 text-sm">
+                                                                {reply.commented_by?.fullName || reply.commented_by?.username}
+                                                            </span>
+                                                            <span className="text-xs text-gray-600">
+                                                                @{reply.commented_by?.username}
+                                                            </span>
+                                                            <span className="text-xs text-gray-500 ml-auto">
+                                                                {new Date(reply.dateCommented).toLocaleString()}
+                                                            </span>
+                                                        </div>
+                                                        <p className="mt-1 text-gray-700 text-sm">{reply.comment}</p>
+                                                        <div className="flex items-center gap-4 mt-2">
+                                                            <button
+                                                                onClick={() => handleCommentLike(reply._id)}
+                                                                disabled={commentLoading}
+                                                                className="flex items-center gap-1 group"
+                                                                aria-label={reply.liked_by?.includes(userAuth.userId) ? "Unlike" : "Like"}
+                                                            >
+                                                              {console.log(`[UI] Checking like status for reply ${reply._id}:`, reply.liked_by?.includes(userAuth.userId))}
+
+                                                                <Heart className={`w-4 h-4 ${
+                                                                    reply.liked_by?.includes(userAuth.userId)
+                                                                        ? 'fill-red-500 text-red-500' 
+                                                                        : 'text-gray-400 group-hover:text-red-500'
+                                                                }`}/>
+                                                                {reply.likes > 0 && (
+                                                                    <span className="text-xs">{reply.likes}</span>
+                                                                )}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ))
+            ) : (
+                <div className="text-center py-8 text-gray-500">
+                    <p>No comments yet. Be the first to comment!</p>
                 </div>
-              </div>
-            ))
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              <p>No comments yet. Be the first to comment!</p>
-            </div>
-          )}
+            )}
         </div>
       </div>
     </div>

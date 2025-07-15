@@ -1,12 +1,12 @@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { loginUser } from "../api/api";
 import { useAuth } from "../contexts/auth-context";
+import { useCart } from "../contexts/cart-context"; // Import useCart
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -33,6 +34,7 @@ export default function LoginPage() {
   const redirectUrl = searchParams.get("redirect") || "/";
 
   const { login } = useAuth();
+  const { guestCart, mergeGuestCart, clearGuestCart } = useCart(); // Use guestCart, mergeGuestCart, clearGuestCart from useCart context
 
   const validateForm = () => {
     const newErrors = {};
@@ -61,52 +63,69 @@ export default function LoginPage() {
     setSubmitError("");
   };
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
+ const handleLogin = async (e) => {
+  e.preventDefault();
 
-    if (!validateForm()) {
-      return;
-    }
+  if (!validateForm()) {
+    return;
+  }
 
-    setIsLoading(true);
-    setSubmitError("");
+  setIsLoading(true);
+  setSubmitError("");
 
-    try {
-      const response = await loginUser({
-        email: formData.email,
-        password: formData.password,
-      });
+  try {
+    const response = await loginUser({
+      email: formData.email,
+      password: formData.password,
+    });
 
-      if (response.data.success && response.data.token && response.data.user) {
-        login(response.data.token, response.data.user.username);
+    if (response.data.success && response.data.token && response.data.user) {
+      // Perform login first
+      login(response.data.token, response.data.user.userId, response.data.user.username, response.data.user.profilePicture, response.data.user.coverPicture);
 
-        if (formData.remember) {
-          localStorage.setItem(
-            "user",
-            JSON.stringify({
-              username: response.data.user.username,
-              profilePicture: response.data.user.profilePicture || "",
-              email: response.data.user.email,
-              fullName: response.data.user.fullName,
-            })
-          );
+      // Then handle cart merge separately
+      if (guestCart.length > 0) {
+        try {
+          await mergeGuestCart(guestCart, response.data.token);
+          clearGuestCart();
+          toast.success("Your guest cart items have been added to your account!");
+        } catch (mergeError) {
+          console.error("Cart merge failed:", mergeError);
+          toast.warning("Logged in successfully, but cart items couldn't be merged");
+          // Continue with login even if merge fails
         }
-
-        toast.success(response.data.message || "Login successful!");
-        navigate(redirectUrl);
-      } else {
-        setSubmitError(
-          response.data.message || "Invalid email or password. Please try again."
-        );
-        toast.error(response.data.message || "Invalid credentials!");
       }
-    } catch (error) {
-      setSubmitError("Invalid email or password. Please try again.");
-      toast.error("Invalid credentials!");
-    } finally {
-      setIsLoading(false);
+
+      if (formData.remember) {
+        localStorage.setItem(
+          "user",
+          JSON.stringify({
+            userId: response.data.user.userId,
+            username: response.data.user.username,
+            profilePicture: response.data.user.profilePicture || "",
+            coverPicture: response.data.user.coverPicture || "",
+            email: response.data.user.email,
+            fullName: response.data.user.fullName,
+          })
+        );
+      }
+
+      toast.success("Login successful!");
+      navigate(redirectUrl);
+    } else {
+      setSubmitError(response.data.message || "Invalid email or password");
+      toast.error(response.data.message || "Invalid credentials!");
     }
-  };
+  } catch (error) {
+    console.error("Login error:", error);
+    const errorMessage = error.response?.data?.message || 
+                        "Invalid email or password. Please try again.";
+    setSubmitError(errorMessage);
+    toast.error(errorMessage);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <div className="flex items-center justify-center p-4">

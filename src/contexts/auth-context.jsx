@@ -1,70 +1,102 @@
 import { createContext, useContext, useState } from "react";
 
-// Create the AuthContext. No need to pass 'undefined' as it's the default.
+// Create the AuthContext
 export const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  // Combine all user authentication state into a single 'userAuth' object
   const [userAuth, setUserAuth] = useState(() => {
-    // Initialize state from localStorage during component initialization
-    // This runs only once when the component mounts.
     const token = localStorage.getItem("token");
+    const userId = localStorage.getItem("userId");
     const username = localStorage.getItem("username");
     const profilePicture = localStorage.getItem("profilePicture");
-    const newNotificationAvailable = localStorage.getItem("new_notification_available") === "true"; // Parse boolean
+    const coverPicture = localStorage.getItem("coverPicture");
+    const newNotificationAvailable = localStorage.getItem("new_notification_available") === "true";
 
     return {
-      isAuthenticated: !!token, // True if token exists
-      username: username || "",
+      isAuthenticated: !!token,
       token: token || null,
+      userId: userId || "",
+      username: username || "",
       profilePicture: profilePicture || "",
+      coverPicture: coverPicture || "",
       new_notification_available: newNotificationAvailable,
     };
   });
 
-  // Login function now takes token, username, and profilePicture,
-  // similar to your previous project.
-  const login = (token, username, profilePicture) => {
+  const login = (token, userId, username, profilePicture, coverPicture) => {
     localStorage.setItem("token", token);
+    localStorage.setItem("userId", userId);
     localStorage.setItem("username", username);
-    localStorage.setItem("profilePicture", profilePicture);
-    // You might get new_notification_available from the login API response
-    // For now, setting it to false or what's expected after login
-    localStorage.setItem("new_notification_available", "false"); 
+    localStorage.setItem("profilePicture", profilePicture || "");
+    localStorage.setItem("coverPicture", coverPicture || "");
+    localStorage.setItem("new_notification_available", "false");
 
     setUserAuth({
       isAuthenticated: true,
-      username,
-      profilePicture,
       token,
-      new_notification_available: false, // Default after login
+      userId,
+      username,
+      profilePicture: profilePicture || "",
+      coverPicture: coverPicture || "",
+      new_notification_available: false,
     });
   };
 
   const logout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("userId");
     localStorage.removeItem("username");
     localStorage.removeItem("profilePicture");
-    localStorage.removeItem("new_notification_available"); // Clear notifications state too
+    localStorage.removeItem("coverPicture");
+    localStorage.removeItem("new_notification_available");
 
     setUserAuth({
       isAuthenticated: false,
       username: "",
+      userId: "",
       profilePicture: "",
+      coverPicture: "",
       token: null,
       new_notification_available: false,
     });
   };
 
-  // If signup is also a way to get a token and log in, it should behave similarly to login
-  const signup = (token, username, profilePicture) => {
-    // This assumes your signup API directly returns a token and user details
-    login(token, username, profilePicture); // Reuse login logic
+  // Fixed signup to include userId parameter
+  const signup = (token, userId, username, profilePicture, coverPicture) => {
+    login(token, userId, username, profilePicture, coverPicture);
   };
 
-  // The value provided by the context will be the userAuth object and the functions
+  const updateUser = (updatedUser) => {
+    // Update localStorage for any changed values
+    if (updatedUser.username !== undefined) {
+      localStorage.setItem("username", updatedUser.username);
+    }
+    if (updatedUser.profilePicture !== undefined) {
+      localStorage.setItem("profilePicture", updatedUser.profilePicture);
+    }
+    if (updatedUser.coverPicture !== undefined) {
+      localStorage.setItem("coverPicture", updatedUser.coverPicture);
+    }
+    if (updatedUser.userId !== undefined) {
+      localStorage.setItem("userId", updatedUser.userId);
+    }
+
+    setUserAuth(prev => ({
+      ...prev,
+      ...updatedUser
+    }));
+  };
+
   return (
-    <AuthContext.Provider value={{ userAuth, login, logout, signup, setUserAuth }}>
+    <AuthContext.Provider 
+      value={{ 
+        userAuth, 
+        login, 
+        logout, 
+        signup, 
+        updateUser 
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

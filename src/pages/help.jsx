@@ -1,3 +1,4 @@
+import { sendContactMessage } from "@/api/api";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -6,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
 import {
   AlertCircle,
   HelpCircle,
@@ -21,6 +21,10 @@ import {
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
+// === React Toastify ===
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+
 export default function HelpPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -34,8 +38,9 @@ export default function HelpPage() {
   });
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState("");
-  const { toast } = useToast();
 
+  // ...faqData and helpCategories (as in your code, unchanged)...
+  // --- BEGIN FAQ DATA ---
   const faqData = [
     {
       id: 1,
@@ -186,8 +191,9 @@ export default function HelpPage() {
       ],
     },
   ];
+  // --- END FAQ DATA ---
 
-  // Filter FAQs based on search query and selected category
+  // --- FAQ Filtering Logic ---
   const filteredFAQs = faqData.filter((faq) => {
     const matchesSearch =
       searchQuery === "" ||
@@ -196,12 +202,11 @@ export default function HelpPage() {
       faq.keywords.some((keyword) =>
         keyword.toLowerCase().includes(searchQuery.toLowerCase())
       );
-
     const matchesCategory = selectedCategory === "all" || faq.category === selectedCategory;
-
     return matchesSearch && matchesCategory;
   });
 
+  // --- Form validation ---
   const validateForm = () => {
     const newErrors = {};
 
@@ -233,9 +238,9 @@ export default function HelpPage() {
     return Object.keys(newErrors).length === 0;
   };
 
+  // --- Form handlers ---
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-    // Clear error when user starts typing
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: "" }));
     }
@@ -254,24 +259,8 @@ export default function HelpPage() {
     setSubmitError("");
 
     try {
-      // Simulate form submission
-      await new Promise((resolve, reject) => {
-        setTimeout(() => {
-          // Simulate random failure for demo
-          if (Math.random() < 0.1) {
-            reject(new Error("Failed to send message. Please try again."));
-          } else {
-            resolve(true);
-          }
-        }, 2000);
-      });
-
-      toast({
-        title: "Message sent successfully!",
-        description: "We'll get back to you within 24 hours.",
-      });
-
-      // Reset form
+      await sendContactMessage(formData);
+      toast.success("Message sent successfully! We'll get back to you within 24 hours.");
       setFormData({
         name: "",
         email: "",
@@ -279,8 +268,13 @@ export default function HelpPage() {
         message: "",
         category: "",
       });
+      setSubmitError("");
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to send message. Please try again.";
+      const errorMessage =
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to send message. Please try again.";
+      toast.error(errorMessage);
       setSubmitError(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -424,7 +418,7 @@ export default function HelpPage() {
               <p className="text-sm text-muted-foreground mb-3">Detailed support request</p>
               <Button
                 variant="outline"
-                onClick={() => document.getElementById("contact-form")?.scrollIntoIntoView({ behavior: "smooth" })}
+                onClick={() => document.getElementById("contact-form")?.scrollIntoView({ behavior: "smooth" })}
               >
                 Fill Out Form
               </Button>

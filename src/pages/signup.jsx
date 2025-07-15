@@ -1,12 +1,12 @@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -28,7 +28,9 @@ export default function SignupPage() {
   });
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState("");
-  const [success, setSuccess] = useState(false); // This state isn't explicitly used for rendering the success page, but kept for consistency if external logic relies on it.
+  const [success, setSuccess] = useState(false);const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+
 
   const navigate = useNavigate();
 
@@ -110,7 +112,7 @@ export default function SignupPage() {
       const res = await registerUser(data); // Await the API call
 
        if (res.data.success) {
-        toast.success("Registration successful!\n Redirecting to login"); // Toast message here
+        toast.success("Registration successful!"); // Toast message here
         // setSuccess(true); // No longer needed as we are directly redirecting
         setTimeout(() => {
           navigate("/login");
@@ -137,6 +139,7 @@ export default function SignupPage() {
   };
 
   return (
+    <>
     <div className="flex items-center justify-center p-4">
       <Card className="mx-auto max-w-sm">
         <CardHeader className="space-y-1 text-center">
@@ -248,19 +251,19 @@ export default function SignupPage() {
                 />
                 <Label htmlFor="terms" className="text-sm">
                   I agree to the{" "}
-                  <Link
-                    to="/terms"
-                    className="text-primary underline-offset-4 hover:underline"
+                  <span
+                    className="text-primary underline cursor-pointer"
+                    onClick={() => setShowTermsModal(true)}
                   >
                     Terms of Service
-                  </Link>{" "}
+                  </span>{" "}
                   and{" "}
-                  <Link
-                    to="/privacy"
-                    className="text-primary underline-offset-4 hover:underline"
+                  <span
+                    className="text-primary underline cursor-pointer"
+                    onClick={() => setShowPrivacyModal(true)}
                   >
                     Privacy Policy
-                  </Link>
+                  </span>
                 </Label>
               </div>
               {errors.agreeToTerms && (
@@ -294,5 +297,50 @@ export default function SignupPage() {
         </form>
       </Card>
     </div>
+    {showTermsModal && (
+  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+    <div className="bg-white dark:bg-zinc-900 p-6 rounded-lg max-w-xl shadow-lg space-y-4">
+      <h2 className="text-xl font-bold">Terms of Service</h2>
+      <div className="max-h-[60vh] overflow-y-auto text-sm space-y-2">
+        <p>
+          By using our platform, you agree to abide by the rules and respect all intellectual property shared on the site. Users must not post, sell, or distribute illegal or offensive content. All transactions are subject to local regulations and Craftique policies.
+        </p>
+        <p>
+          We reserve the right to suspend or terminate accounts that violate our guidelines or abuse our services. Content uploaded must be original or properly licensed.
+        </p>
+        <p>
+          Craftique is not liable for damages resulting from user-to-user transactions or third-party services integrated into the platform.
+        </p>
+      </div>
+      <div className="flex justify-end">
+        <Button onClick={() => setShowTermsModal(false)}>Close</Button>
+      </div>
+    </div>
+  </div>
+)}
+
+{showPrivacyModal && (
+  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+    <div className="bg-white dark:bg-zinc-900 p-6 rounded-lg max-w-xl shadow-lg space-y-4">
+      <h2 className="text-xl font-bold">Privacy Policy</h2>
+      <div className="max-h-[60vh] overflow-y-auto text-sm space-y-2">
+        <p>
+          We collect personal data such as your name, email, and profile images to provide and improve our services. Your data is stored securely and is never shared with third parties without consent.
+        </p>
+        <p>
+          We use cookies for analytics and improving user experience. You may opt out through your browser settings.
+        </p>
+        <p>
+          Users can request data deletion or export by contacting our support team. We comply with international privacy laws including GDPR and similar standards.
+        </p>
+      </div>
+      <div className="flex justify-end">
+        <Button onClick={() => setShowPrivacyModal(false)}>Close</Button>
+      </div>
+    </div>
+  </div>
+)}
+</>
   );
 }
+
