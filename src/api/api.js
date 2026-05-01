@@ -1,7 +1,8 @@
 import axios from "axios";
+console.log(import.meta.env.VITE_API_URL)
 
 const api = axios.create({
-  baseURL: "http://localhost:3000",
+  baseURL: import.meta.env.VITE_API_URL,
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",
@@ -380,7 +381,7 @@ export const searchUsers = ({ query, page = 1 }) => {
 
 export const savingOrders = (data, token) => {
   // Make sure token is properly received
-  console.log('[API DEBUG] Received token:', token); // Add this
+  //console.log('[API DEBUG] Received token:', token); // Add this
   
   return api.post("/api/orders", data, {
     headers: {

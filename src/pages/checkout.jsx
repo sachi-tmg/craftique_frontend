@@ -86,21 +86,44 @@ export default function CheckoutPage() {
   }, [userAuth.isAuthenticated, userAuth.user]);
 
   // Listen for eSewa popup message
-  useEffect(() => {
-    const handleEsewaMessage = (event) => {
-      if (event.data?.type === "esewaPaymentComplete") {
-        if (event.data.success) {
-          setEsewaPaid(true);
-          toast.success("eSewa payment successful!");
-          handleEsewaOrder();
-        } else {
-          toast.error("Payment failed " + (event.data.message || ""));
-        }
+useEffect(() => {
+  const handleEsewaMessage = (event) => {
+    console.log("Received message:", event.data);
+    console.log("Message origin:", event.origin);
+    
+    // Allow both ngrok and localhost origins
+    const allowedOrigins = [
+      'https://drove-groggy-handcuff.ngrok-free.dev',
+      'http://localhost:5173',
+      window.location.origin
+    ];
+    
+    if (!allowedOrigins.includes(event.origin)) {
+      console.log("Ignoring message from unauthorized origin:", event.origin);
+      return;
+    }
+    
+    if (event.data?.type === "esewaPaymentComplete") {
+      console.log("eSewa payment complete:", event.data);
+      
+      if (event.data.success) {
+        setEsewaPaid(true);
+        toast.success("eSewa payment successful!");
+        // Automatically process order
+        setTimeout(() => {
+          processOrder(true);
+        }, 500);
+      } else {
+        toast.error("Payment failed: " + (event.data.message || "Please try again"));
+        setEsewaPaid(false);
+        setIsProcessing(false);
       }
-    };
-    window.addEventListener("message", handleEsewaMessage);
-    return () => window.removeEventListener("message", handleEsewaMessage);
-  }, [cartItems, deliveryOption, formData, userAuth.token]); // keep latest state
+    }
+  };
+  
+  window.addEventListener("message", handleEsewaMessage);
+  return () => window.removeEventListener("message", handleEsewaMessage);
+}, [cartItems, deliveryOption, formData, userAuth.token, total]);
 
   // Validation
   const validateForm = () => {
@@ -164,186 +187,187 @@ export default function CheckoutPage() {
 
   // Main order process
   const processOrder = async (skipPayment = false) => {
-    setIsProcessing(true);
-    setSubmitError("");
-    // eSewa flow: skip payment validation, must be paid already
-    if (paymentMethod === "esewa" && (esewaPaid || skipPayment)) {
-      try {
-        if (!userAuth.isAuthenticated || !userAuth.token) {
-          toast.error("You must be logged in to place an order.");
-          setIsProcessing(false);
-          return;
-        }
-        const orderData = {
-          items: cartItems.map(item => ({
-            _id: item._id,
-            title: item.title,
-            quantity: item.quantity || 1,
-            price: item.price,
-            image: item.image
-          })),
-          deliveryOption,
-          paymentMethod,
-          totalAmount: total,
-          subtotal,
-          taxAmount: tax,
-          deliveryCharge: deliveryFee,
-          shippingAddress: {
-            street: formData.address || (deliveryOption === "pickup" ? "N/A" : ""),
-            city: formData.city,
-            zip: formData.zip || (deliveryOption === "pickup" ? "N/A" : ""),
-          },
-          customerEmail: formData.email,
-          customerPhone: formData.phone,
-        };
-        const backendOrderNumber = await sendOrderToBackend(orderData, userAuth.token);
-        setOrderNumber(backendOrderNumber);
-        setShowSuccessDialog(true);
-        clearCart();
-        if (userAuth.isAuthenticated) {
-          try { await clearCartAPI(userAuth.token); } catch {}
-        }
-        // toast.success("Your order has been placed!");
-      } catch (error) {
-        setSubmitError(error.message);
-        toast.error(error.message);
-      } finally {
-        setIsProcessing(false);
-      }
-      return;
-    }
-
-    // Normal card/cash
-    const isFormValid = validateForm();
-    const isPaymentValid = validatePayment();
-    if (!isFormValid || !isPaymentValid) {
-      setIsProcessing(false);
-      setSubmitError(paymentMethod === "esewa"
-        ? "Please complete eSewa payment first!"
-        : "Please correct the errors in the form.");
-      toast.error(paymentMethod === "esewa"
-        ? "Please complete eSewa payment first!"
-        : "Please correct the errors in the form.");
-      return;
-    }
-
-    try {
-      const token = userAuth.token;
-      if (!userAuth.isAuthenticated || !token) {
-        toast.error("You must be logged in to place an order.");
+  setIsProcessing(true);
+  setSubmitError("");
+  
+  try {
+    // For eSewa, we need to check if payment is completed
+    if (paymentMethod === "esewa") {
+      if (!esewaPaid && !skipPayment) {
+        toast.error("Please complete eSewa payment first!");
         setIsProcessing(false);
         return;
       }
-      const orderData = {
-        items: cartItems.map(item => ({
-          _id: item._id,
-          title: item.title,
-          quantity: item.quantity || 1,
-          price: item.price,
-          image: item.image
-        })),
-        deliveryOption,
-        paymentMethod,
-        totalAmount: total,
-        subtotal,
-        taxAmount: tax,
-        deliveryCharge: deliveryFee,
-        shippingAddress: {
-          street: formData.address || (deliveryOption === "pickup" ? "N/A" : ""),
-          city: formData.city,
-          zip: formData.zip || (deliveryOption === "pickup" ? "N/A" : ""),
-        },
-        customerEmail: formData.email,
-        customerPhone: formData.phone,
-      };
-      const backendOrderNumber = await sendOrderToBackend(orderData, userAuth.token);
-      setOrderNumber(backendOrderNumber);
-      setShowSuccessDialog(true);
-      if (!buyNowItem) {
-        clearCart();
-        if (userAuth.isAuthenticated) {
-          try {
-            await clearCartAPI(userAuth.token);
-          } catch (error) {
-            toast.warning("Order placed but cart might not be fully cleared");
-          }
+    }
+    
+    // Validate form for delivery
+    if (deliveryOption === "local") {
+      const isFormValid = validateForm();
+      if (!isFormValid) {
+        setIsProcessing(false);
+        return;
+      }
+    }
+    
+    // For card payment, validate card details
+    if (paymentMethod === "card") {
+      const isPaymentValid = validatePayment();
+      if (!isPaymentValid) {
+        setIsProcessing(false);
+        return;
+      }
+    }
+    
+    const token = userAuth.token;
+    if (!userAuth.isAuthenticated || !token) {
+      toast.error("You must be logged in to place an order.");
+      setIsProcessing(false);
+      return;
+    }
+    
+    const orderData = {
+      items: cartItems.map(item => ({
+        _id: item._id,
+        title: item.title,
+        quantity: item.quantity || 1,
+        price: item.price,
+        image: item.image
+      })),
+      deliveryOption,
+      paymentMethod,
+      totalAmount: total,
+      subtotal,
+      taxAmount: tax,
+      deliveryCharge: deliveryFee,
+      shippingAddress: {
+        street: formData.address || (deliveryOption === "pickup" ? "N/A" : ""),
+        city: formData.city,
+        zip: formData.zip || (deliveryOption === "pickup" ? "N/A" : ""),
+      },
+      customerEmail: formData.email,
+      customerPhone: formData.phone,
+      paymentStatus: paymentMethod === "esewa" ? "paid" : "pending" // Mark eSewa as paid
+    };
+    
+    const backendOrderNumber = await sendOrderToBackend(orderData, userAuth.token);
+    setOrderNumber(backendOrderNumber);
+    setShowSuccessDialog(true);
+    
+    if (!buyNowItem) {
+      clearCart();
+      if (userAuth.isAuthenticated) {
+        try {
+          await clearCartAPI(userAuth.token);
+        } catch (error) {
+          console.warn("Cart clear error:", error);
         }
       }
-      toast.success("Your order has been placed!");
-    } catch (error) {
-      setSubmitError(error.message);
-      toast.error(error.message);
-    } finally {
-      setIsProcessing(false);
     }
-  };
+    
+    toast.success("Your order has been placed!");
+    
+  } catch (error) {
+    console.error("Order processing error:", error);
+    setSubmitError(error.message);
+    toast.error(error.message || "Failed to place order");
+  } finally {
+    setIsProcessing(false);
+  }
+};
 
   // eSewa popup
-  const handleEsewaRedirectPayment = async () => {
-    setIsProcessing(true);
-    setSubmitError("");
-    try {
-      const backendUrl = "http://localhost:3000";
-      const endpoint = `${backendUrl}/api/payment/initialize-esewa`;
-      const tempOrderId = `order-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${userAuth.token}`
-        },
-        body: JSON.stringify({
-          amount: total,
-          orderId: tempOrderId,
-        }),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      if (data.success) {
-        const esewaRedirectUrl = "https://rc-epay.esewa.com.np/api/epay/main/v2/form";
-        const successCallbackUrl = `${window.location.origin}/verify-esewa?success=1&paymentId=${data.payment.transaction_uuid}`;
-        const failureCallbackUrl = `${window.location.origin}/verify-esewa?success=0&paymentId=${data.payment.transaction_uuid}`;
-        const params = {
-          amount: data.payment.amount,
-          tax_amount: "0",
-          total_amount: data.payment.amount,
-          transaction_uuid: data.payment.transaction_uuid,
-          product_code: data.payment.product_code,
-          product_service_charge: "0",
-          product_delivery_charge: "0",
-          success_url: successCallbackUrl,
-          failure_url: failureCallbackUrl,
-          signed_field_names: data.payment.signed_field_names,
-          signature: data.payment.signature,
-        };
-        const popup = window.open('', 'esewaPopup', 'width=600,height=700,resizable=yes,scrollbars=yes');
-        if (!popup) throw new Error("Popup blocked! Please enable popups for this site.");
-        const form = document.createElement("form");
-        form.method = "POST";
-        form.action = esewaRedirectUrl;
-        form.target = 'esewaPopup';
-        Object.entries(params).forEach(([key, value]) => {
-          const hiddenField = document.createElement("input");
-          hiddenField.type = "hidden";
-          hiddenField.name = key;
-          hiddenField.value = value;
-          form.appendChild(hiddenField);
-        });
-        document.body.appendChild(form);
-        form.submit();
-        document.body.removeChild(form);
-      } else {
-        toast.error(data.message || "Failed to initialize eSewa payment");
-        setIsProcessing(false);
-      }
-    } catch (error) {
-      toast.error(error.message || "An error occurred while initializing payment.");
+const handleEsewaRedirectPayment = async () => {
+  setIsProcessing(true);
+  setSubmitError("");
+  
+  try {
+    if (!userAuth.isAuthenticated || !userAuth.token) {
+      toast.error("Please login to continue with payment");
       setIsProcessing(false);
+      return;
     }
-  };
+    
+    const loadingToast = toast.loading("Initializing eSewa payment...");
+    
+    const backendUrl = import.meta.env.VITE_API_URL;
+    const response = await fetch(`${backendUrl}/api/payment/initialize-esewa`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${userAuth.token}`
+      },
+      body: JSON.stringify({
+        amount: total,
+      }),
+    });
+    
+    toast.dismiss(loadingToast);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log("Payment init response:", data);
+    
+    if (data.success) {
+      const currentOrigin = 'https://drove-groggy-handcuff.ngrok-free.dev';
+      const successUrl = `${currentOrigin}/verify-esewa?success=1&paymentId=${data.payment.transaction_uuid}`;
+      const failureUrl = `${currentOrigin}/verify-esewa?success=0&paymentId=${data.payment.transaction_uuid}`;
+      
+      console.log("Success URL:", successUrl);
+      console.log("Failure URL:", failureUrl);
+      
+      // Create and submit form
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = 'https://rc-epay.esewa.com.np/api/epay/main/v2/form';
+      form.target = '_blank';
+      
+      const params = {
+        amount: data.payment.amount,
+        tax_amount: "0",
+        total_amount: data.payment.amount,
+        transaction_uuid: data.payment.transaction_uuid,
+        product_code: data.payment.product_code,
+        product_service_charge: "0",
+        product_delivery_charge: "0",
+        success_url: successUrl,
+        failure_url: failureUrl,
+        signed_field_names: data.payment.signed_field_names,
+        signature: data.payment.signature
+      };
+      
+      console.log("Submitting form with params:", params);
+      
+      Object.entries(params).forEach(([key, value]) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = value;
+        form.appendChild(input);
+      });
+      
+      document.body.appendChild(form);
+      
+      // Log that form is being submitted
+      console.log("Form submitted to eSewa");
+      form.submit();
+      document.body.removeChild(form);
+      
+      setIsProcessing(false);
+      toast.info("eSewa payment window opened. Please complete payment.");
+      
+    } else {
+      throw new Error(data.message || "Failed to initialize payment");
+    }
+    
+  } catch (error) {
+    console.error("Payment error:", error);
+    toast.error(error.message);
+    setIsProcessing(false);
+  }
+};
 
   // Util
   const formatCurrency = (amount) => {

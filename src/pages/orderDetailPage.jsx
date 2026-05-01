@@ -21,7 +21,9 @@ export default function OrderDetailsPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`http://localhost:3000/api/orders/${orderId}`, {
+      const backendUrl = import.meta.env.VITE_API_URL;
+
+      const response = await axios.get(`${backendUrl}/api/orders/${orderId}`, {
         withCredentials: true,
         headers: {
           Accept: "application/json"

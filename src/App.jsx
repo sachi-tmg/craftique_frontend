@@ -26,7 +26,7 @@ import SearchPage from './pages/search';
 import SettingsPage from './pages/settings';
 import SignupPage from './pages/signup';
 import { UploadPage } from './pages/upload';
-import VerifyEsewaPage from './pages/verify-esewa';
+import VerifyEsewa from './pages/VerifyEsewa';
 
 function App() {
   return (
@@ -60,7 +60,7 @@ function App() {
                     <Route path="/edit-creation/:creation_id" element={<EditCreationPage/>} />
                     <Route path="/checkout" element={<CheckoutPage />} />
                     <Route path="/orders/:orderId" element={<OrderDetailsPage />} />
-                    <Route path="/verify-esewa" element={<VerifyEsewaPage />} />
+                    <Route path="/verify-esewa" element={<VerifyEsewa/>} />
                     <Route path="/orders" element={<OrdersPage />} />
                   </Route>
 
