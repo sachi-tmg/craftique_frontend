@@ -165,23 +165,23 @@ useEffect(() => {
 
   
 const handleLike = async () => {
-  console.log('[DEBUG] handleLike triggered'); // 1. Start of function
+  //console.log('[DEBUG] handleLike triggered'); // 1. Start of function
   if (!userAuth.isAuthenticated) {
-    console.log('[DEBUG] User not authenticated, showing toast');
+    //console.log('[DEBUG] User not authenticated, showing toast');
     toast.error("Please sign in to like creations");
     return;
   }
 
   try {
     setLikeLoading(true);
-    console.log('[DEBUG] Calling toggleLike with:', {
-      creationId: craft._id || craft.creation_id,
-      token: userAuth.token ? 'exists' : 'missing' // Don't log actual token
-    });
+    // console.log('[DEBUG] Calling toggleLike with:', {
+    //   creationId: craft._id || craft.creation_id,
+    //   token: userAuth.token ? 'exists' : 'missing' // Don't log actual token
+    // });
     
     const response = await toggleLike(craft.creation_id, userAuth.token);
     
-    console.log('[DEBUG] toggleLike response:', response);
+    //console.log('[DEBUG] toggleLike response:', response);
     setIsLiked(response.likedByUser);
     setCraft(prev => ({
       ...prev,
@@ -198,7 +198,7 @@ const handleLike = async () => {
     });
     toast.error("Failed to toggle like");
   } finally {
-    console.log('[DEBUG] Like operation completed');
+    //console.log('[DEBUG] Like operation completed');
     setLikeLoading(false);
   }
 };
@@ -809,7 +809,7 @@ const toggleReplies = (commentId) => {
                                                                 className="flex items-center gap-1 group"
                                                                 aria-label={reply.liked_by?.includes(userAuth.userId) ? "Unlike" : "Like"}
                                                             >
-                                                              {console.log(`[UI] Checking like status for reply ${reply._id}:`, reply.liked_by?.includes(userAuth.userId))}
+                                                              {/* {console.log(`[UI] Checking like status for reply ${reply._id}:`, reply.liked_by?.includes(userAuth.userId))} */}
 
                                                                 <Heart className={`w-4 h-4 ${
                                                                     reply.liked_by?.includes(userAuth.userId)

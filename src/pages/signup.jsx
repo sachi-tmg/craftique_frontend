@@ -107,7 +107,7 @@ export default function SignupPage() {
         email: formData.email,
         password: formData.password,
       };
-      console.log("data before registering", data);
+      //console.log("data before registering", data);
 
       const res = await registerUser(data); // Await the API call
 

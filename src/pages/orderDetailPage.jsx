@@ -32,7 +32,7 @@ export default function OrderDetailsPage() {
 
       const order = response.data;
 
-      console.log("Raw API Response Order Data:", order);
+      // console.log("Raw API Response Order Data:", order);
 
       const mappedOrder = {
         id: order._id,

@@ -10,7 +10,7 @@ export default function VerifyEsewa() {
     const paymentId = searchParams.get('paymentId');
     const data = searchParams.get('data');
     
-    console.log("VerifyEsewa - Success:", success, "PaymentId:", paymentId);
+    //console.log("VerifyEsewa - Success:", success, "PaymentId:", paymentId);
     
     // Send message back to main window
     if (window.opener) {

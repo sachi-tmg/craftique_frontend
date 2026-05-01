@@ -1,5 +1,5 @@
 import axios from "axios";
-console.log(import.meta.env.VITE_API_URL)
+//console.log(import.meta.env.VITE_API_URL)
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
@@ -277,10 +277,10 @@ export const checkFavoriteStatusAPI = (creationId, token) =>
   });
 
 export const toggleLike = async (creationId, token) => {
-  console.log('[API DEBUG] toggleLike called with:', {
-    creationId,
-    hasToken: !!token
-  });
+  //console.log('[API DEBUG] toggleLike called with:', {
+  //   creationId,
+  //   hasToken: !!token
+  // });
   
   try {
     const response = await api.post(
@@ -289,10 +289,10 @@ export const toggleLike = async (creationId, token) => {
       { headers: { Authorization: `Bearer ${token}` } }
     );
     
-    console.log('[API DEBUG] toggleLike successful response:', {
-      status: response.status,
-      data: response.data
-    });
+    // console.log('[API DEBUG] toggleLike successful response:', {
+    //   status: response.status,
+    //   data: response.data
+    // });
     return response.data;
   } catch (error) {
     console.error('[API DEBUG] toggleLike error:', {

@@ -32,7 +32,6 @@ export default function CartPage() {
             image: item.creationId.creationPicture || "/placeholder.svg",
             price: parseFloat(item.creationId.price) || 0,
           }));
-          console.log("WOWWWWWWWWWWWWWW", items)
           setUserCart(items);
         } catch (err) {
           toast.error("Failed to load cart items.");

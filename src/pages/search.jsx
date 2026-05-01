@@ -29,15 +29,15 @@ export default function SearchPage() {
         if (!generalQuery && !categoryFilter) {
             setCreations([]);
             setLoading(false);
-            console.log("Frontend: No query or category, skipping API call.");
+            //console.log("Frontend: No query or category, skipping API call.");
             return;
         }
 
-        console.log("Frontend: Calling searchCreations with data:", {
-            query: generalQuery,
-            tag: categoryFilter,
-            page: 1
-        });
+        // console.log("Frontend: Calling searchCreations with data:", {
+        //     query: generalQuery,
+        //     tag: categoryFilter,
+        //     page: 1
+        // });
 
         try {
             const response = await searchCreations({
@@ -46,7 +46,7 @@ export default function SearchPage() {
                 page: 1
             });
 
-            console.log("Frontend: Received API response:", response.data);
+            //console.log("Frontend: Received API response:", response.data);
 
             setCreations(response.data?.creations?.map(c => ({
                 id: c.creation_id,
@@ -58,7 +58,7 @@ export default function SearchPage() {
                 category: c.category
             })) || []);
 
-            console.log("Frontend: Creations state updated:", response.data?.creations?.length || 0, "items.");
+            //console.log("Frontend: Creations state updated:", response.data?.creations?.length || 0, "items.");
 
         } catch (error) {
             console.error("Frontend: Error fetching creations:", error.response?.data || error.message);

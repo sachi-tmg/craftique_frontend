@@ -88,8 +88,8 @@ export default function CheckoutPage() {
   // Listen for eSewa popup message
 useEffect(() => {
   const handleEsewaMessage = (event) => {
-    console.log("Received message:", event.data);
-    console.log("Message origin:", event.origin);
+    //console.log("Received message:", event.data);
+    //console.log("Message origin:", event.origin);
     
     // Allow both ngrok and localhost origins
     const allowedOrigins = [
@@ -99,12 +99,12 @@ useEffect(() => {
     ];
     
     if (!allowedOrigins.includes(event.origin)) {
-      console.log("Ignoring message from unauthorized origin:", event.origin);
+      //console.log("Ignoring message from unauthorized origin:", event.origin);
       return;
     }
     
     if (event.data?.type === "esewaPaymentComplete") {
-      console.log("eSewa payment complete:", event.data);
+      //console.log("eSewa payment complete:", event.data);
       
       if (event.data.success) {
         setEsewaPaid(true);
@@ -308,15 +308,15 @@ const handleEsewaRedirectPayment = async () => {
     }
     
     const data = await response.json();
-    console.log("Payment init response:", data);
+    //console.log("Payment init response:", data);
     
     if (data.success) {
       const currentOrigin = 'https://drove-groggy-handcuff.ngrok-free.dev';
       const successUrl = `${currentOrigin}/verify-esewa?success=1&paymentId=${data.payment.transaction_uuid}`;
       const failureUrl = `${currentOrigin}/verify-esewa?success=0&paymentId=${data.payment.transaction_uuid}`;
       
-      console.log("Success URL:", successUrl);
-      console.log("Failure URL:", failureUrl);
+      //console.log("Success URL:", successUrl);
+      //console.log("Failure URL:", failureUrl);
       
       // Create and submit form
       const form = document.createElement('form');
@@ -338,7 +338,7 @@ const handleEsewaRedirectPayment = async () => {
         signature: data.payment.signature
       };
       
-      console.log("Submitting form with params:", params);
+      //console.log("Submitting form with params:", params);
       
       Object.entries(params).forEach(([key, value]) => {
         const input = document.createElement('input');
@@ -351,7 +351,7 @@ const handleEsewaRedirectPayment = async () => {
       document.body.appendChild(form);
       
       // Log that form is being submitted
-      console.log("Form submitted to eSewa");
+      //console.log("Form submitted to eSewa");
       form.submit();
       document.body.removeChild(form);
       
